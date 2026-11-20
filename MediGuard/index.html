@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MediGuard</title>
+  <meta name="description" content="Scan a medicine strip with your phone to spot fake or expired medicine and find alternatives with the same composition.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <img src="icon.svg" alt="" class="logo">
+    <div>
+      <h1>MediGuard</h1>
+      <p>Is your medicine real? Scan it and find out.</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- ======================= STEP 1: SCAN ======================= -->
+    <section class="card">
+      <h2><span class="step">1</span> Scan the pack</h2>
+      <div class="btn-row">
+        <button id="btnLive" class="btn primary">📷 Scan barcode / QR</button>
+        <label class="btn primary" for="photo">🖼️ Photo of strip / box</label>
+        <input id="photo" type="file" accept="image/*" capture="environment" hidden>
+      </div>
+      <p class="hint">Photo: lay the strip flat in good light, with the side showing <b>B.No., Mfg and Exp</b>. The photo stays on your phone.</p>
+
+      <div id="liveBox" class="live" hidden>
+        <div id="reader"></div>
+        <button id="btnStop" class="btn ghost">Stop camera</button>
+      </div>
+      <div id="readerFile" hidden></div>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <ul id="codeList" class="chips"></ul>
+
+      <details id="ocrBox">
+        <summary>Text read from the pack <small>(tap to view or fix)</small></summary>
+        <textarea id="ocrText" rows="7" placeholder="Text from the photo appears here. You can also paste or type the text printed on the pack."></textarea>
+      </details>
+
+      <div class="demo">
+        <span>No strip at hand? Try a demo:</span>
+        <button class="chip-btn" data-demo="genuine">✅ Genuine</button>
+        <button class="chip-btn" data-demo="fake">❌ Fake</button>
+        <button class="chip-btn" data-demo="copiedQR">⚠️ Copied QR</button>
+        <button class="chip-btn" data-demo="expired">⌛ Expired</button>
+      </div>
+    </section>
+
+    <!-- ======================= STEP 2: DETAILS ======================= -->
+    <section class="card">
+      <h2><span class="step">2</span> Check the details</h2>
+      <p class="hint">Filled in from the scan. Fix anything the camera got wrong, or type it yourself.</p>
+      <div class="grid">
+        <label class="wide">Medicine name (brand)
+          <input id="fBrand" list="brandList" placeholder="e.g. Dolo 650" autocomplete="off">
+          <datalist id="brandList"></datalist>
+        </label>
+        <label>Batch no. (B.No.)
+          <input id="fBatch" placeholder="e.g. DOBS3975" autocapitalize="characters" autocomplete="off">
+        </label>
+        <label>Barcode digits
+          <input id="fBarcode" inputmode="numeric" placeholder="13 digits under the bars" autocomplete="off">
+        </label>
+        <label>Mfg. date
+          <input id="fMfg" type="month">
+        </label>
+        <label>Exp. date
+          <input id="fExp" type="month">
+        </label>
+        <label class="wide">Manufacturer / marketed by
+          <input id="fMaker" placeholder="e.g. Micro Labs Ltd" autocomplete="off">
+        </label>
+      </div>
+    </section>
+
+    <!-- ======================= STEP 3: LOOK ======================= -->
+    <section class="card">
+      <h2><span class="step">3</span> What do you notice?</h2>
+      <p class="hint">Tick anything that is true. Leave it blank if all looks normal.</p>
+      <div id="checklist" class="checklist"></div>
+    </section>
+
+    <button id="btnCheck" class="btn big">🔍 Check this medicine</button>
+
+    <!-- ======================= RESULT ======================= -->
+    <section id="result" class="card result" hidden tabindex="-1">
+      <div id="verdict" class="verdict"></div>
+      <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
+      <p id="riskText" class="risk-text"></p>
+      <button id="btnSpeak" class="btn ghost small">🔊 Read aloud</button>
+
+      <div id="medInfo" class="med-info"></div>
+
+      <h3>What the agent checked</h3>
+      <ul id="evidence" class="evidence"></ul>
+
+      <div id="altBox">
+        <h3>Same composition – other options</h3>
+        <p class="hint">Same salts and strength. Buy only from a licensed pharmacy, and ask your doctor or pharmacist before switching.</p>
+        <ul id="alternatives" class="alts"></ul>
+      </div>
+
+      <h3>What to do now</h3>
+      <ol id="actions" class="actions"></ol>
+    </section>
+
+    <!-- ======================= FIND ALTERNATIVES ======================= -->
+    <section class="card">
+      <h2>💊 Find a medicine with the same composition</h2>
+      <input id="search" type="search" placeholder="Type a brand or salt, e.g. Pan 40 or paracetamol" autocomplete="off">
+      <div id="searchResults"></div>
+    </section>
+
+    <p class="disclaimer">
+      MediGuard helps you <b>spot warning signs</b>. It is not a lab test and cannot prove a medicine is genuine.
+      Always buy from licensed pharmacies, keep your bill, and ask a doctor or pharmacist before changing any medicine.
+      The drug alert list in this demo holds sample entries – update it from <b>cdsco.gov.in</b>.
+    </p>
+  </main>
+
+  <script src="data/medicines.js"></script>
+  <script src="data/samples.js"></script>
+  <script src="agent.js"></script>
+  <script src="lib/html5-qrcode.min.js" defer></script>
+  <script src="lib/tesseract.min.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

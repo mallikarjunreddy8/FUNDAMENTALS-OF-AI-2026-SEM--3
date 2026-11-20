@@ -1,0 +1,13 @@
+{
+  "name": "MediGuard - Fake Medicine Checker",
+  "short_name": "MediGuard",
+  "description": "Scan a medicine strip to spot fake or expired medicine and find alternatives with the same composition.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f1f5f4",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
