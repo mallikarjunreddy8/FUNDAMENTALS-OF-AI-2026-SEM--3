@@ -1,0 +1,6 @@
+# Drug alert list used by the agent. THE ROWS BELOW ARE SAMPLE ENTRIES for the demo and tests.
+# Replace them with the monthly "Drug Alert" list from CDSCO (cdsco.gov.in -> Drug Alerts)
+# or your State Drug Controller. Keep the same columns.
+batch,product,status,source
+FAKE2291,Crocin Advance Tablet,Spurious (sample entry),Demo data - replace with the CDSCO drug alert list
+NSQ0099,Pantoprazole 40mg Tablet,Not of standard quality (sample entry),Demo data - replace with the CDSCO drug alert list

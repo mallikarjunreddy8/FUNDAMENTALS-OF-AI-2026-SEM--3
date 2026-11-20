@@ -4,3 +4,5 @@ __pycache__/
 .vscode/
 .ipynb_checkpoints/
 .env
+MediGuard/data/A_Z_medicines_dataset_of_India.csv
+MediGuard/data/*.pkl
