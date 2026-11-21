@@ -184,8 +184,27 @@
     // ---------- Calcium carbonate 1250 mg + Vitamin D3 250 IU ----------
     { brand: "Shelcal 500", match: { name: "SHELCAL", number: "500" }, company: "Torrent Pharmaceuticals", companyKeys: ["TORRENT"],
       form: "Tablet", rx: false, use: "Calcium / vitamin D supplement", salts: [["Calcium carbonate", 1250, "mg"], ["Vitamin D3", 250, "IU"]] },
-    { brand: "Calcium and Vitamin D3 Tablets (Calcium carbonate 1250 mg + Vitamin D3 250 IU)", generic: true, company: GENERIC_SOURCE, companyKeys: [],
+    { brand: "Calcium and Vitamin D3 Tablets (Calcium carbonate 1250 mg + Vitamin D3 250 IU)", generic: true, nameRe: "CALC[IL]UM\\s+AND\\s+VITAMIN\\s*D", company: GENERIC_SOURCE, companyKeys: [],
       form: "Tablet", rx: false, use: "Calcium / vitamin D supplement", salts: [["Calcium carbonate", 1250, "mg"], ["Vitamin D3", 250, "IU"]] },
+
+    // ---------- Aceclofenac 100 mg + Paracetamol 325 mg + Chlorzoxazone 250 mg (muscle relaxant combo) ----------
+    { brand: "Megaceclo MR", match: { name: "MEGACECLO", extra: "MR" }, company: "Aristo Pharmaceuticals", companyKeys: ["ARISTO", "MARINE MEDICARE"],
+      form: "Tablet", rx: true, use: "Muscle pain, back pain", salts: [["Aceclofenac", 100, "mg"], ["Paracetamol", 325, "mg"], ["Chlorzoxazone", 250, "mg"]] },
+    { brand: "Zerodol-MR", match: { name: "ZERODOL", extra: "MR" }, company: "Ipca Laboratories", companyKeys: ["IPCA"],
+      form: "Tablet", rx: true, use: "Muscle pain, back pain", salts: [["Aceclofenac", 100, "mg"], ["Paracetamol", 325, "mg"], ["Chlorzoxazone", 250, "mg"]] },
+    { brand: "Aceclofenac 100 mg + Paracetamol 325 mg + Chlorzoxazone 250 mg", generic: true, company: GENERIC_SOURCE, companyKeys: [],
+      form: "Tablet", rx: true, use: "Muscle pain, back pain", salts: [["Aceclofenac", 100, "mg"], ["Paracetamol", 325, "mg"], ["Chlorzoxazone", 250, "mg"]] },
+
+    // ---------- more brands from real strips ----------
+    { brand: "Fixim DT 200", match: { name: "FIXIM", number: "200" }, company: "Ajanta Pharma", companyKeys: ["AJANTA", "SCOTT-EDIL", "SCOTT EDIL"],
+      form: "Dispersible tablet", rx: true, use: "Bacterial infections (antibiotic)", salts: [["Cefixime", 200, "mg"]] },
+    { brand: "Duasafe 625", match: { name: "DUASAFE", number: "625" }, company: "Ajanta Pharma", companyKeys: ["AJANTA", "ALPS"],
+      form: "Tablet", rx: true, use: "Bacterial infections (antibiotic)", salts: [["Amoxycillin", 500, "mg"], ["Clavulanic acid", 125, "mg"]] },
+
+    // ---------- Vitamin B-Complex Tablets NFI (Prophylactic) - government formulary ----------
+    { brand: "Vitamin B-Complex Tablets NFI (Prophylactic)", generic: true, nameRe: "B[\\s.\\-]*COMPLEX", company: GENERIC_SOURCE, companyKeys: ["EUROKEM"],
+      form: "Tablet", rx: false, use: "Vitamin B supplement",
+      salts: [["Vitamin B1", 2, "mg"], ["Vitamin B2", 2, "mg"], ["Vitamin B6", 0.5, "mg"], ["Niacinamide", 25, "mg"], ["Calcium pantothenate", 1, "mg"]] },
   ];
 
   // How each salt may be written on a pack (checked against the UPPER CASE text)
@@ -212,6 +231,13 @@
     "Dicyclomine": "DICYCLOMINE|DICYCLOVERINE",
     "Fexofenadine": "FEXOFENADINE",
     "Calcium carbonate": "CALC[IL]UM|CALCIU",
+    "Aceclofenac": "ACECLOFENAC|ACECLOFEN",
+    "Chlorzoxazone": "CHLORZOXAZONE|CHLORZOX",
+    "Vitamin B1": "VITAMIN\\s*B\\s*1|THIAMINE",
+    "Vitamin B2": "VITAMIN\\s*B\\s*2|RIBOFLAVIN",
+    "Vitamin B6": "VITAMIN\\s*B\\s*6|PYRIDOXINE",
+    "Niacinamide": "NIACINAMIDE|NICOTINAMIDE",
+    "Calcium pantothenate": "PANTOTHENATE",
     "Vitamin D3": "VITAMIN\\s*D[3SYZ:]?\\b|CHOLECALCIFEROL",
   };
 

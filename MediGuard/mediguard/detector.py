@@ -507,7 +507,8 @@ class Detector:
                 else:
                     add("info", 0, "QR opens a website", f"{c['domain']} - is it the manufacturer's official site?")
         if not codes:
-            add("info", 0, "No barcode / QR scanned", "Scan it if the pack has one, for extra checks.")
+            add("info", 0, "No QR code - that's normal",
+                "Most strips have no QR code (only the boxes of some top brands do). The check uses the printed details.")
 
         # ---------- rule 8b: government free-supply medicine ----------
         if re.search(r"GOVERNMENT\s+SUPPLY|GOVT\.?\s+SUPPLY|NOT\s+FOR\s+SALE|FREE\s+SUPPLY|NOT\s+TO\s+BE\s+SOLD", pack.text.upper()):

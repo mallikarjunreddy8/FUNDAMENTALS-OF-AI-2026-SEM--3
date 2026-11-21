@@ -66,7 +66,7 @@ Reply with only this JSON object:
     const r = await sample.json(AI_PROMPT, { images: file });
     if (!r || typeof r !== "object") throw { code: "invalid_json" };
     state.aiNotes = (Array.isArray(r.print_problems) ? r.print_problems : []).map(String).filter(Boolean).slice(0, 4);
-    $("ocrText").value = aiToText(r);
+    const text = aiToText(r);
     const put = (id, v) => { if (v && !$(id).value) $(id).value = v; };
     put("fBatch", r.batch ? String(r.batch).toUpperCase() : "");
     put("fMfg", toMonthInput(r.mfg));
@@ -76,6 +76,7 @@ Reply with only this JSON object:
     const unsure = r.batch && String(r.batch).includes("?") ? " Part of the batch no. was unreadable - tap 'Edit details' to fix it." : "";
     setStatus((r.photo_quality === "poor" ? "Read, but the photo is unclear - a sharper photo gives a better check. " :
       "Read by Claude. ") + "Check the details below." + unsure);
+    return text;
   }
 
   const FIELDS = { brand: "fBrand", batch: "fBatch", barcode: "fBarcode", price: "fPrice", mfg: "fMfg", exp: "fExp", manufacturer: "fMaker" };
@@ -165,77 +166,7 @@ Reply with only this JSON object:
     if ($("status").classList.contains("busy")) setStatus("");
   }
 
-  // ---------------------------------------------------------------- photo: barcode + OCR
-  // Shrink big phone photos and boost contrast so the text is easier to read
-  function loadImage(file) {
-    const url = URL.createObjectURL(file);
-    return new Promise((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => { URL.revokeObjectURL(url); resolve(i); };
-      i.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't open that image")); };
-      i.src = url;
-    });
-  }
-
-  /*
-   * Batch no. and dates are often STAMPED in dark ink (black / blue / violet) on shiny foil,
-   * sometimes sideways. This keeps only the stamp ink (drops red / green print and the foil)
-   * and turns the picture, so the text reader can read it.
-   *   mode "blue": dark and bluish ink    mode "dark": very dark ink of any colour except red
-   */
-  function inkCanvas(img, mode, angle) {
-    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-    const src = document.createElement("canvas");
-    src.width = w; src.height = h;
-    const sctx = src.getContext("2d");
-    sctx.drawImage(img, 0, 0, w, h);
-    const px = sctx.getImageData(0, 0, w, h);
-    const d = px.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i], g = d[i + 1], b = d[i + 2], lum = (r + g + b) / 3;
-      const ink = mode === "blue" ? lum < 100 && b - r > 5 : lum < 60 && Math.abs(r - b) < 12;
-      d[i] = d[i + 1] = d[i + 2] = ink ? 0 : 255;
-    }
-    sctx.putImageData(px, 0, 0);
-    const out = document.createElement("canvas");
-    const turn = angle % 180 !== 0;
-    out.width = turn ? h : w; out.height = turn ? w : h;
-    const octx = out.getContext("2d");
-    octx.fillStyle = "#fff";
-    octx.fillRect(0, 0, out.width, out.height);
-    octx.translate(out.width / 2, out.height / 2);
-    octx.rotate((angle * Math.PI) / 180);
-    octx.drawImage(src, -w / 2, -h / 2);
-    return out;
-  }
-
-  // only keep lines that look like batch / date lines from the extra passes (the rest is foil noise)
-  const STAMP_LINE = /\b(B\.?\s?NO|BATCH|LOT|E[XK]?P|MFG|MFD|MFO|USE\s+BEFORE)\b|\d{1,2}\s*[\/.\-]\s*(\d{4}|\d{2})\b/i;
-
-  async function prepareImage(img) {
-    {
-      const scale = Math.min(1, 1800 / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      const ctx = c.getContext("2d");
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      const px = ctx.getImageData(0, 0, c.width, c.height);
-      const d = px.data;
-      let lo = 255, hi = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        d[i] = d[i + 1] = d[i + 2] = g;
-        if (g < lo) lo = g;
-        if (g > hi) hi = g;
-      }
-      const span = Math.max(1, hi - lo);
-      for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = ((d[i] - lo) * 255) / span;
-      ctx.putImageData(px, 0, 0);
-      return c;
-    }
-  }
+  // ---------------------------------------------------------------- photos: see ocr.js for the text reader
 
   // ---------------------------------------------------------------- screens
   const TITLES = { home: "MediGuard", scan: "Scanning…", manual: "Check manually", result: "Result", find: "Same composition" };
@@ -248,80 +179,55 @@ Reply with only this JSON object:
     if (name === "find") setTimeout(() => $("search").focus(), 50);
   }
 
-  async function scanPhoto(file) {
-    if (!file) return;
+  // One or more photos (e.g. front and back of a strip) are read and their text combined
+  async function scanPhotos(fileList) {
+    const files = [...(fileList || [])].filter(Boolean).slice(0, 4);
+    if (!files.length) return;
     await stopLive();
     resetForm();                 // every scan starts fresh
     $("ocrText").value = "";
     showView("scan");
     state.today = null;
     $("btnCheck").disabled = true;
+    const texts = [];
+    const sample = await aiReaderPromise;   // Claude vision: only on claude.ai, never needed
 
-    // 1. look for a barcode / QR / DataMatrix in the photo
-    if (window.Html5Qrcode) {
-      setStatus("Looking for a barcode or QR code…", true);
-      try {
-        const scanner = new Html5Qrcode("readerFile", { formatsToSupport: formats(), verbose: false });
-        const res = await scanner.scanFileV2(file, false);
-        addCode(res.result && res.result.format ? res.result.format.formatName : "CODE", res.decodedText);
-        scanner.clear();
-      } catch (e) { /* no code in this photo - that's fine */ }
-    }
-
-    // 2. read the printed text: Claude vision when available, else the free OCR reader
-    state.aiNotes = [];
-    state.readBy = "";
-    let done = false;
-    const sample = await aiReaderPromise;
-    if (sample) {
-      try {
-        await readWithAI(sample, file);
-        done = true;
-      } catch (e) {
-        const why = { not_granted: "AI reading was not allowed", rate_limited: "AI reading is busy",
-          image_rejected: "the photo couldn't be sent" }[e && e.code] || "AI reading failed";
-        setStatus(`${why} - using the basic text reader instead…`, true);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const of = files.length > 1 ? ` (photo ${i + 1} of ${files.length})` : "";
+      // 1. a barcode / QR / DataMatrix (many strips have none - that's normal)
+      if (window.Html5Qrcode) {
+        setStatus("Looking for a barcode or QR code" + of + "…", true);
+        try {
+          const scanner = new Html5Qrcode("readerFile", { formatsToSupport: formats(), verbose: false });
+          const res = await scanner.scanFileV2(file, false);
+          addCode(res.result && res.result.format ? res.result.format.formatName : "CODE", res.decodedText);
+          scanner.clear();
+        } catch (e) { /* no code in this photo */ }
       }
-    }
-    if (done) {
-      // nothing more to read
-    } else if (!window.Tesseract) {
-      setStatus("The text reader did not load. Tap 'Type the details instead'.");
-    } else {
-      try {
-        setStatus("Reading the text on the pack… (first time downloads the reader, ~5 MB)", true);
-        const img = await loadImage(file);
-        let pass = "Reading the text";
-        const worker = await Tesseract.createWorker("eng", 1, {
-          workerPath: "lib/worker.min.js",
-          ...(window.MEDIGUARD_OCR || {}),   // optional: local OCR engine + language files (no CDN)
-          logger: (m) => {
-            if (m.status === "recognizing text") setStatus(`${pass}… ${Math.round(m.progress * 100)}%`, true);
-          },
-        });
-        const { data } = await worker.recognize(await prepareImage(img));
-        let text = (data.text || "").trim();
-        // batch / expiry missing? read the stamp ink on its own, also turned sideways
-        const missing = () => {
-          const p = MediAgent.readPrintedText(text);
-          return !p.batch || !p.exp;
-        };
-        const passes = [["blue", 270], ["blue", 90], ["blue", 0], ["dark", 270], ["dark", 90], ["dark", 0]];
-        for (let k = 0; k < passes.length && missing(); k++) {
-          pass = `Looking for a stamped batch / expiry (${k + 1}/${passes.length})`;
-          const res = await worker.recognize(inkCanvas(img, ...passes[k]));
-          const lines = (res.data.text || "").split("\n").filter((l) => STAMP_LINE.test(l));
-          if (lines.length) text += "\n" + lines.join("\n");
+      // 2. the printed text: on-device reader (offline); Claude vision only if this page runs on claude.ai
+      let text = "";
+      if (sample) {
+        try {
+          text = await readWithAI(sample, file);
+        } catch (e) {
+          setStatus("AI reading unavailable - using the on-device reader…", true);
         }
-        await worker.terminate();
-        $("ocrText").value = text;
-        state.readBy = "OCR";
-        setStatus($("ocrText").value ? "Done. Check the details below, then press Check." :
-          "Couldn't read any text. Try a sharper photo in better light, or type the details.");
-      } catch (err) {
-        setStatus("Couldn't read the text (" + (err.message || err) + "). Tap 'Type the details instead'.");
       }
+      if (!text && window.MediOCR && window.Tesseract) {
+        try {
+          const res = await MediOCR.read(file, (msg, f) => setStatus((f ? `${msg}… ${Math.round(f * 100)}%` : msg) + of, true));
+          text = res.text;
+          state.readBy = state.readBy || "on-device reader";
+        } catch (err) {
+          setStatus("Couldn't read the text (" + (err.message || err) + ").");
+        }
+      }
+      if (text) texts.push(text);
     }
+    $("ocrText").value = texts.join("\n");
+    setStatus($("ocrText").value ? "Done. Check the result - tap 'Edit details' to fix anything misread." :
+      "Couldn't read any text. Try a sharper photo in good light, or type the details.");
     $("btnCheck").disabled = false;
     fillFromScan();
     if ($("ocrText").value || state.codes.length) runCheck();
@@ -392,6 +298,12 @@ Reply with only this JSON object:
     const report = (await serverCheck(obs)) || Object.assign(MediAgent.check(obs),
       { source: `Offline check (built-in list of ${MediAgent.brands().length} medicines)` });
     state.lastReport = report;
+    // what the camera read, so the user can compare it with the strip
+    const readItems = [["Name", $("fBrand").value || (report.medicine ? report.medicine.brand : "")],
+      ["Batch no.", $("fBatch").value], ["Mfg.", $("fMfg").value], ["Exp.", $("fExp").value]];
+    $("readBox").hidden = !state.readBy;
+    $("readList").replaceChildren(...readItems.flatMap(([k, val]) => [el("dt", {}, k),
+      el("dd", { class: val ? "" : "missing" }, val ? (/^\d{4}-\d{2}$/.test(val) ? val.slice(5) + "/" + val.slice(0, 4) : val) : "not read")]));
     $("source").textContent = (report.source || "") + (state.readBy ? ` · photo read by ${state.readBy}` : "");
     const v = report.verdict;
 
@@ -500,7 +412,8 @@ Reply with only this JSON object:
     $("btnLive").hidden = !(window.isSecureContext && !window.claude);
     $("btnLive").addEventListener("click", startLive);
     $("btnStop").addEventListener("click", stopLive);
-    $("photo").addEventListener("change", (e) => { scanPhoto(e.target.files[0]); e.target.value = ""; });
+    $("photo").addEventListener("change", (e) => { scanPhotos(e.target.files); e.target.value = ""; });
+    $("photoUpload").addEventListener("change", (e) => { scanPhotos(e.target.files); e.target.value = ""; });
     $("btnCheck").addEventListener("click", runCheck);
     $("btnSpeak").addEventListener("click", speak);
     $("search").addEventListener("input", runSearch);
@@ -510,7 +423,7 @@ Reply with only this JSON object:
       if (i.id !== "search") state.today = null;
     }));
 
-    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !window.MEDIGUARD_APP) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
   }

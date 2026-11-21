@@ -85,6 +85,15 @@ main { padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabbar
 .scan-hero strong { font-size: 1.35rem; }
 .scan-hero small { opacity: 0.9; font-size: 0.95rem; }
 
+.upload-btn {
+  display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 14px 16px;
+  border-radius: var(--radius); border: 1.5px dashed var(--brand); background: var(--brand-soft);
+  color: var(--text); cursor: pointer;
+}
+.upload-btn svg { width: 30px; height: 30px; flex: none; fill: none; stroke: var(--brand); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.upload-btn strong { display: block; }
+.upload-btn small { display: block; color: var(--muted); font-size: 0.85rem; }
+.upload-btn:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
 .tile {
   display: grid; gap: 10px; align-content: start; text-align: left;
@@ -225,3 +234,13 @@ summary small { color: var(--muted); font-weight: 400; }
 .update-banner strong { display: block; }
 .update-banner small { display: block; color: var(--muted); }
 .update-get { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); text-decoration: none; }
+
+/* ---------- what the camera read ---------- */
+.read-box { margin: 12px 0; padding: 12px; border-radius: 12px; border: 1.5px solid var(--info); background: var(--info-soft); }
+.read-head strong { display: block; color: var(--info); }
+.read-head small { color: var(--muted); }
+.read-box dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0; }
+.read-box dt { color: var(--muted); font-size: 0.9rem; }
+.read-box dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.read-box dd.missing { color: var(--warn); font-weight: 600; }
+.read-fix { background: var(--card); }

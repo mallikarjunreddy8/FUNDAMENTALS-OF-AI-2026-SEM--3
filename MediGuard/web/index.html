@@ -32,9 +32,14 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.2"/><path d="M9 7.5h6"/></svg>
         </span>
         <strong>Scan medicine</strong>
-        <small>Take a photo of the strip or box</small>
+        <small>Take a photo of the strip or box - no QR code needed</small>
       </label>
       <input id="photo" type="file" accept="image/*" capture="environment" hidden>
+      <input id="photoUpload" type="file" accept="image/*" multiple hidden>
+      <label for="photoUpload" class="upload-btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <span><strong>Upload strip photos</strong><small>From your gallery - add front and back together</small></span>
+      </label>
 
       <div class="tiles">
         <button class="tile" data-go="manual">
@@ -127,6 +132,11 @@
         <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
         <p id="riskText" class="risk-text"></p>
         <p id="source" class="risk-text"></p>
+        <div id="readBox" class="read-box" hidden>
+          <div class="read-head"><strong>Read from your photo</strong><small>Compare with the strip - the camera can misread a digit</small></div>
+          <dl id="readList"></dl>
+          <button class="btn small read-fix" data-go="manual">Correct these</button>
+        </div>
         <div class="row-btns">
           <button id="btnSpeak" class="btn ghost small">Read aloud</button>
           <button class="btn ghost small" data-go="manual">Edit details</button>
@@ -182,6 +192,7 @@
   <script src="agent.js"></script>
   <script src="lib/html5-qrcode.min.js" defer></script>
   <script src="lib/tesseract.min.js" defer></script>
+  <script src="ocr.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

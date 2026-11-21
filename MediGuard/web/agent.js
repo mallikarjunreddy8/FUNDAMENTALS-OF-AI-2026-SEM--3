@@ -205,17 +205,40 @@
     const t = upper(text);
     const out = { batch: null, mfg: null, exp: null, manufacturerLine: null, strengths: [] };
 
-    const b = t.match(/(?:\bB\.?\s?NO|\bBATCH\s*(?:NO|NUMBER)?|\bLOT\s*(?:NO)?)\s*\.?\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-\/]{2,14})/);
-    if (b) out.batch = b[1];
+    // Camera misreads inside numbers: "Q9/2026" -> "09/2026", "BC25OO9" -> "BC25009"
+    const fixDigits = (str) => str.replace(/[0-9OQDILZSB|\/.\-]{3,}/g, (tok) => {
+      const digitsN = (tok.match(/\d/g) || []).length, alnum = (tok.match(/[0-9A-Z]/g) || []).length;
+      if (digitsN < 2 || digitsN / alnum < 0.6) return tok;
+      return tok.replace(/[OQD]/g, "0").replace(/[IL|]/g, "1").replace(/Z/g, "2").replace(/S/g, "5").replace(/B/g, "8");
+    });
+    const tt = fixDigits(t);
 
-    const mfg = t.match(new RegExp("(?:MFG|MFD|MANUFACTURED\\s+ON|MANUFACTURING\\s+DATE|DOM)\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE));
-    if (mfg) out.mfg = dateFromMatch(mfg);
+    // Batch: every "B.No. / Batch No. / Lot" reading; keep the most complete one
+    const batches = [...t.matchAll(/(?:\bB\.?\s?N[O0]|\bBATCH\s*(?:N[O0]|NUMBER)?|\bLOT\s*(?:N[O0])?)\s*\.?\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-\/]{2,14})/g)]
+      .map((m) => m[1].replace(/[\-\/]+$/, ""))
+      .filter((c) => /\d/.test(c));
+    if (batches.length) {
+      out.batch = batches.reduce((a, c) => {
+        const score = (x) => Math.min(x.replace(/[^A-Z0-9]/g, "").length, 12) + (/^[A-Z]{1,4}\d/.test(x) ? 1 : 0);
+        return score(c) > score(a) ? c : a;
+      });
+    }
 
-    const exp = t.match(new RegExp("(?:EXP(?:IRY)?|\\bE[KP]P?(?=[.:\\s])|USE\\s+BEFORE|BEST\\s+BEFORE)\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE));
-    if (exp) out.exp = dateFromMatch(exp);
+    const MFG_LABEL = "(?:MFG|MFD|M[EF][CG6D]{1,2}(?=[.:\\s])|MF(?=[.:\\s])|MANUFACTURED\\s+ON|MANUFACTURING\\s+DATE|DOM)";
+    const EXP_LABEL = "(?:EXP\\w*|E?X?[PR]IRY|EXPER\\s?Y|\\bE[KP]P?(?=[.:\\s])|USE\\s+BEFORE|BEST\\s+BEFORE)";
+    const after = (label) => [...tt.matchAll(new RegExp(label + "\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE, "g"))]
+      .map(dateFromMatch).filter((d) => d && d.y >= 2000 && d.y <= 2045);
+    const mfgs = after(MFG_LABEL), exps = after(EXP_LABEL);
+    if (mfgs.length) out.mfg = mfgs[0];
+    // expiry: the latest reading that comes after manufacture (an expiry before Mfg is a misread)
+    const okExp = exps.filter((d) => !out.mfg || monthIndex(d) > monthIndex(out.mfg));
+    if (okExp.length) out.exp = okExp.reduce((a, d) => (monthIndex(d) > monthIndex(a) ? d : a));
+    else if (exps.length && !out.mfg) out.exp = exps[0];
+    else if (exps.length) out.expDoubtful = true;
+
     // No "Exp" label read (smudged or sideways stamp)? The expiry is the latest date printed on a pack.
     if (!out.exp) {
-      const all = [...t.matchAll(new RegExp(DATE_RE, "g"))].map(dateFromMatch)
+      const all = [...tt.matchAll(new RegExp(DATE_RE, "g"))].map(dateFromMatch)
         .filter((d) => d && d.y >= 2000 && d.y <= 2045 && (!out.mfg || monthIndex(d) > monthIndex(out.mfg)));
       if (all.length) {
         out.exp = all.reduce((a, b) => (monthIndex(b) > monthIndex(a) ? b : a));
@@ -306,6 +329,8 @@
         const got = (number && hasNumber(number) ? 1 : 0) + (extra && hasExtra(extra) ? 1 : 0);
 
         if (sk === name) {
+          // short names (PAN, AZEE, ZIFI...) are easy to hit by accident: need the strength too
+          if (got < needs && name.length < 5) continue;
           consider(med, got === needs ? "exact" : "partial", got === needs ? 3 + got : 1 + got * 0.5, i, 0);
         } else if (name.length >= 5 && !knownNames.has(sk) && !saltWords.test(sk)) {
           const dist = levenshtein(sk, name);
@@ -326,7 +351,9 @@
     const t = upper(text);
     let best = null;
     for (const med of DATA.MEDICINES) {
-      if (!med.salts.every(([s]) => new RegExp(DATA.SALTS[s] || upper(s)).test(t))) continue;
+      // the generic name printed on the pack ("Vitamin B-Complex Tablets") counts as well as the salts
+      const byName = med.nameRe && new RegExp(med.nameRe).test(t);
+      if (!byName && !med.salts.every(([s]) => new RegExp(DATA.SALTS[s] || upper(s)).test(t))) continue;
       const score = med.salts.length * 2 + (med.generic ? 1 : 0);
       if (!best || score > best.score) best = { med, kind: "composition", score, seen: compositionText(med) };
     }
@@ -385,7 +412,10 @@
       const fromQR = findMedicineByName(qrBrand.brand) || (identify(qrBrand.brand) || {}).med;
       if (fromQR) id = { med: fromQR, kind: "exact", seen: qrBrand.brand };
     }
-    if (!id && facts.text.length > 40) id = identifyByComposition(facts.text);
+    if ((!id || id.kind === "partial") && facts.text.length > 40) {
+      const byComp = identifyByComposition(facts.text);   // the printed salts beat a half-read name
+      if (byComp) id = byComp;
+    }
     const med = id ? id.med : null;
 
     if (!id) {
@@ -527,8 +557,9 @@
       }
     }
     if (!codes.length) {
-      add("info", 0, "No barcode / QR scanned",
-        med && !med.generic ? "Popular brands in India carry a QR code - scan it for extra checks." : "Scan one if the pack has it.");
+      add("info", 0, "No QR code - that's normal",
+        "Most strips have no QR code (only the boxes of some top brands do). The check uses the printed name, " +
+        "composition, batch and dates. If the box has a QR code, scanning it adds one more check.");
     }
 
     // ---------- Rule 6b: government free-supply medicine ----------

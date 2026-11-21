@@ -19,11 +19,14 @@ fs.cpSync(WEB, WWW, { recursive: true, filter: (src) => !/[\\/]test([\\/]|$)/.te
 // OCR engine + English language data, served from inside the app
 fs.mkdirSync(path.join(WWW, "lib/core"), { recursive: true });
 fs.mkdirSync(path.join(WWW, "lib/lang"), { recursive: true });
-for (const f of ["tesseract-core-lstm.wasm.js", "tesseract-core-simd-lstm.wasm.js"]) {
+for (const f of ["tesseract-core-lstm.wasm.js", "tesseract-core-simd-lstm.wasm.js",
+                 "tesseract-core.wasm.js", "tesseract-core-simd.wasm.js"]) {   // the last two include orientation detection
   fs.copyFileSync(path.join(NM, "tesseract.js-core", f), path.join(WWW, "lib/core", f));
 }
 const gz = fs.readFileSync(path.join(NM, "@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz"));
 fs.writeFileSync(path.join(WWW, "lib/lang/eng.traineddata.txt"), gz.toString("base64"));
+const osd = fs.readFileSync(path.join(NM, "@tesseract.js-data/osd/4.0.0_best_int/osd.traineddata.gz"));
+fs.writeFileSync(path.join(WWW, "lib/lang/osd.traineddata.txt"), osd.toString("base64"));
 fs.copyFileSync(path.join(ROOT, "www-extra/ocr-worker.js"), path.join(WWW, "lib/ocr-worker.js"));
 fs.copyFileSync(path.join(ROOT, "www-extra/update.js"), path.join(WWW, "update.js"));
 
