@@ -1,0 +1,91 @@
+Dataset: 253,973 medicines
+
+Experiment 1: detection agent on realistic packs
+  camera only:
+OCR error rate   0.00  0.02  0.05  0.10
+pack                                   
+genuine           0.0  14.0  24.5  42.2
+substandard       0.0  14.5  28.2  43.5
+crude           100.0  99.2  98.5  93.2
+copied_qr        59.2  66.2  70.2  68.2
+perfect          10.5  22.2  34.2  53.0
+  camera + user confirms:
+OCR error rate   0.00   0.02   0.05  0.10
+pack                                     
+genuine           0.0    3.5   10.0  18.8
+substandard       0.0    6.5   10.2  22.5
+crude           100.0  100.0  100.0  99.8
+copied_qr        56.2   61.8   64.8  65.0
+perfect           9.8   17.5   21.8  31.0
+  saved /home/user/FUNDAMENTALS-OF-AI-2026-SEM--3/MediGuard/results/exp1_detector.png
+
+Experiment 2: share of people using the app
+  India retail (NDS 2014-16)         adoption 0.00 done
+  India retail (NDS 2014-16)         adoption 0.10 done
+  India retail (NDS 2014-16)         adoption 0.25 done
+  India retail (NDS 2014-16)         adoption 0.50 done
+  India retail (NDS 2014-16)         adoption 0.75 done
+  India retail (NDS 2014-16)         adoption 1.00 done
+  India govt supply (NDS 2014-16)    adoption 0.00 done
+  India govt supply (NDS 2014-16)    adoption 0.10 done
+  India govt supply (NDS 2014-16)    adoption 0.25 done
+  India govt supply (NDS 2014-16)    adoption 0.50 done
+  India govt supply (NDS 2014-16)    adoption 0.75 done
+  India govt supply (NDS 2014-16)    adoption 1.00 done
+  LMIC average (WHO 2017)            adoption 0.00 done
+  LMIC average (WHO 2017)            adoption 0.10 done
+  LMIC average (WHO 2017)            adoption 0.25 done
+  LMIC average (WHO 2017)            adoption 0.50 done
+  LMIC average (WHO 2017)            adoption 0.75 done
+  LMIC average (WHO 2017)            adoption 1.00 done
+  LMIC meta-analysis (Ozawa 2018)    adoption 0.00 done
+  LMIC meta-analysis (Ozawa 2018)    adoption 0.10 done
+  LMIC meta-analysis (Ozawa 2018)    adoption 0.25 done
+  LMIC meta-analysis (Ozawa 2018)    adoption 0.50 done
+  LMIC meta-analysis (Ozawa 2018)    adoption 0.75 done
+  LMIC meta-analysis (Ozawa 2018)    adoption 1.00 done
+                                             S&F taken (%)        Harm per 1000 doses         Caught by app (%)         False alarms (%)       
+                                                      mean    std                mean     std              mean     std             mean    std
+scenario                        app adoption                                                                                                   
+India govt supply (NDS 2014-16) 0.00                10.367  1.064              23.624   1.673               NaN     NaN              NaN    NaN
+                                0.10                 9.669  0.649              24.170   3.528             48.86  10.486            8.182  1.404
+                                0.25                 8.966  0.524              21.732   1.674             54.90   3.104            8.496  0.707
+                                0.50                 7.957  1.245              20.144   3.016             54.70   5.894            7.362  0.501
+                                0.75                 6.864  0.547              17.848   2.804             52.48   4.926            7.676  0.452
+                                1.00                 4.509  0.401              12.368   1.217             58.42   5.447            7.974  0.672
+India retail (NDS 2014-16)      0.00                 3.268  0.249               7.962   1.197               NaN     NaN              NaN    NaN
+                                0.10                 3.082  0.215               7.592   1.120             36.80  19.322            7.940  1.721
+                                0.25                 2.880  0.376               7.816   2.191             37.92  22.374            8.338  0.806
+                                0.50                 2.879  0.291               7.142   1.410             30.46   8.027            7.706  0.633
+                                0.75                 2.437  0.290               5.444   0.970             37.12  17.792            7.836  0.410
+                                1.00                 2.367  0.258               5.630   0.950             31.94   6.694            7.764  0.633
+LMIC average (WHO 2017)         0.00                 9.634  0.936              38.860   4.061               NaN     NaN              NaN    NaN
+                                0.10                 8.698  0.568              35.998   4.517             60.34  15.083            7.184  0.970
+                                0.25                 7.464  0.905              30.574   5.118             51.02   4.613            8.088  0.602
+                                0.50                 6.965  1.053              29.746   5.898             45.76   7.948            7.876  0.615
+                                0.75                 6.333  0.747              25.502   2.982             46.04   5.269            7.476  0.348
+                                1.00                 6.275  0.559              24.522   3.562             39.48   2.641            7.866  0.863
+LMIC meta-analysis (Ozawa 2018) 0.00                11.181  1.152              44.984   6.618               NaN     NaN              NaN    NaN
+                                0.10                10.401  0.529              40.780   2.880             66.06   5.559            8.618  1.117
+                                0.25                 9.689  0.537              39.238   2.726             60.88   7.477            7.986  0.919
+                                0.50                 8.580  0.645              32.810   4.098             51.70   5.173            7.714  0.742
+                                0.75                 8.813  2.235              34.030  10.854             44.04   7.671            7.952  0.665
+                                1.00                 6.866  1.620              27.516   7.688             43.70   5.602            7.600  0.523
+  saved /home/user/FUNDAMENTALS-OF-AI-2026-SEM--3/MediGuard/results/exp2_adoption.png
+
+Experiment 3: arms race
+  saved /home/user/FUNDAMENTALS-OF-AI-2026-SEM--3/MediGuard/results/exp3_arms_race.png
+  day 360: perfect clones 100% of production, app catch rate 62% (adaptive) vs 85% (not adaptive)
+
+Experiment 4: policies
+                                     S&F taken (%)       Harm per 1000 doses       Shops closed      
+                                              mean   std                mean   std         mean   std
+policy                                                                                               
+Nothing (no app, routine inspection)         10.33  1.60               43.71  8.62          6.6  2.07
+Inspectors use reports only                   9.63  0.94               38.86  4.06         11.4  0.55
+App only (50%)                                8.46  1.45               38.76  7.35          8.0  1.22
+App + reports + led inspection                6.97  1.05               29.75  5.90         11.4  1.52
+App + reports + 2 inspectors                  6.41  0.94               25.02  4.60         13.0  3.24
+  saved /home/user/FUNDAMENTALS-OF-AI-2026-SEM--3/MediGuard/results/exp4_policies.png
+
+All done in 304 s. Results are in /home/user/FUNDAMENTALS-OF-AI-2026-SEM--3/MediGuard/results

@@ -335,15 +335,21 @@ class Detector:
 
         # ---------- rule 1: which medicine is it? (searches all 253,973 names) ----------
         kind, key, seen = (None, None, None)
+        from_ocr = False          # True when the name was only read by the camera (not typed / not from a code)
         if pack.brand:
             kind, key, seen = self.identify(pack.brand, typed=True)
         if kind != "exact" and pack.text:
             k2 = self.identify(pack.text)
             if k2[0] and (kind is None or k2[0] == "exact"):
                 kind, key, seen = k2
+                from_ocr = not pack.brand
         qr_brand = next((c["brand"] for c in codes if c.get("brand")), None)
-        if kind is None and qr_brand:
-            kind, key, seen = self.identify(qr_brand, typed=True)
+        if qr_brand and kind != "exact":
+            k3 = self.identify(qr_brand, typed=True)
+            if k3[0] == "exact" and (kind is None or (kind == "lookalike" and from_ocr and k3[1] == key)):
+                # the QR names the same real brand: the "lookalike" was just the camera misreading
+                kind, key, seen = k3
+                from_ocr = False
         row_i = db.best_row(db.rows_for_brand(key), printed["maker"] or pack.text) if key else None
         med = db.row(row_i) if row_i is not None else None
 
@@ -355,9 +361,13 @@ class Detector:
             else:
                 add("info", 0, "Medicine not identified", "Type the brand name or scan the printed side.")
         elif kind == "lookalike":
-            add("danger", 35, f'Name looks like a copy of "{med["name"]}"',
-                f'The pack reads "{seen}". That name is not in the list of {len(db):,} medicines, but it is '
-                f'{Levenshtein.distance(seen, key)} letter(s) away from the real brand. Check the spelling by eye.')
+            msg = (f'The pack reads "{seen}". That name is not in the list of {len(db):,} medicines, but it is '
+                   f'{Levenshtein.distance(seen, key)} letter(s) away from the real brand. ')
+            if from_ocr:   # the camera may have misread one letter: ask the user to confirm
+                add("warn", 30, f'Name may be a copy of "{med["name"]}"',
+                    msg + "The camera can misread letters - check the spelling by eye and type it in step 2.")
+            else:
+                add("danger", 35, f'Name looks like a copy of "{med["name"]}"', msg + "Fakers often change one letter.")
         else:
             add("pass", 0, f"Recognised: {med['name']}",
                 f"{D.composition_text(med['salts'])} - {med['manufacturer']}.")
@@ -370,8 +380,18 @@ class Detector:
         # ---------- rule 3: strength matches the composition ----------
         if med is not None and kind == "exact" and len(pack.text) > 40 and printed["strengths"]:
             want = [(v, u) for _, _, v, u in med["salts"] if v is not None and u in ("MG", "MCG", "IU", "G")]
-            missing = [w for w in want if w not in printed["strengths"]]
-            if want and missing:
+            found = printed["strengths"]
+            missing = [w for w in want if w not in found]
+            # a strength that is printed but belongs to none of the salts (an unreadable number is not evidence)
+            odd = [(fv, fu) for fv, fu in found if (fv, fu) not in want]
+            near = lambda f: any(u == f[1] and Levenshtein.distance(f"{v:g}", f"{f[0]:g}") <= 1 for v, u in want)  # noqa: E731
+            if want and missing and odd and all(near(f) for f in odd) and not pack.brand:
+                add("warn", 10, "Strength may not match - check by eye",
+                    f"{med['name']} should contain {D.composition_text(med['salts'])}. "
+                    "The camera read a slightly different number.")
+            elif want and missing and not odd:
+                add("info", 0, "Strength not readable", f"It should be {D.composition_text(med['salts'])}.")
+            elif want and missing:
                 add("danger", 30, "Strength doesn't match the medicine",
                     f"{med['name']} contains {D.composition_text(med['salts'])}, but the pack shows "
                     + ", ".join(f"{v:g} {u.lower()}" for v, u in printed["strengths"]) + ".")
@@ -384,7 +404,9 @@ class Detector:
             words = [w for w in D.norm_text(med["manufacturer"]).split()
                      if len(w) > 2 and w not in {"LTD", "PVT", "PRIVATE", "LIMITED", "INDIA", "PHARMA",
                                                  "PHARMACEUTICALS", "LABORATORIES", "HEALTHCARE", "THE", "AND"}]
-            if words and any(w in maker_text for w in words[:2]):
+            maker_words = maker_text.split()
+            if words and any(w in maker_text or any(Levenshtein.distance(w, x) <= max(1, len(w) // 4)
+                                                    for x in maker_words) for w in words[:2]):
                 add("pass", 0, "Manufacturer matches", med["manufacturer"])
             elif printed["maker"]:
                 add("danger", 30, "Different manufacturer",
@@ -414,7 +436,14 @@ class Detector:
             add("warn", 10, "No batch number found", "Every genuine medicine prints a batch number (B.No.).")
 
         # ---------- rule 7: dates ----------
-        mfg, exp = printed["mfg"], printed["exp"]
+        code_exp = next((c["exp"] for c in codes if c.get("exp")), None)
+        code_mfg = next((c["mfg"] for c in codes if c.get("mfg")), None)
+        if not printed["exp"] and code_exp:
+            add("info", 0, "Expiry taken from the QR / barcode", "The printed date couldn't be read.")
+        mfg, exp = printed["mfg"] or code_mfg, printed["exp"] or code_exp
+        if code_exp and printed["exp"] and not pack.exp and printed["exp"] != code_exp \
+                and Levenshtein.distance(show(code_exp), show(printed["exp"])) <= 1:
+            exp = code_exp   # one misread digit: trust the machine-readable code for the date checks
         if exp:
             if months(exp) < now:
                 add("danger", 50, "EXPIRED", f"It expired in {show(exp)}. Do not take it.")
@@ -440,12 +469,21 @@ class Detector:
                     add("danger", 40, "Barcode number is invalid", f"{c['gtin']} fails the GS1 check digit test.")
             pb = printed["batch"]
             if c.get("batch") and pb:
-                if re.sub(r"[^A-Z0-9]", "", c["batch"].upper()) != re.sub(r"[^A-Z0-9]", "", pb.upper()):
+                cb, pbn = re.sub(r"[^A-Z0-9]", "", c["batch"].upper()), re.sub(r"[^A-Z0-9]", "", pb.upper())
+                if cb != pbn and Levenshtein.distance(cb, pbn.translate(OCR_FIX)) <= 1 or \
+                        cb != pbn and Levenshtein.distance(cb, pbn) <= 1:
+                    add("warn", 10, "Code batch almost matches the print",
+                        f"Code says {c['batch']}, camera read {pb}. Probably a misread - check by eye.")
+                elif cb != pbn:
                     add("danger", 45, "QR / barcode batch doesn't match the print",
                         f"Code says {c['batch']}, pack says {pb}. Fakers copy QR codes from real packs.")
                 else:
                     add("pass", 0, "Code batch matches the print", f"Both say {pb}.")
-            if c.get("exp") and exp and c["exp"] != exp:
+            if c.get("exp") and exp and c["exp"] != exp and Levenshtein.distance(show(c["exp"]), show(exp)) <= 1 \
+                    and printed["exp"] and not pack.exp:
+                add("warn", 10, "Code expiry almost matches the print",
+                    f"Code says {show(c['exp'])}, camera read {show(exp)}. Check the printed date by eye.")
+            elif c.get("exp") and exp and c["exp"] != exp:
                 add("danger", 35, "QR / barcode expiry doesn't match the print",
                     f"Code says {show(c['exp'])}, pack says {show(exp)}.")
             if c["kind"] == "qr-data":
@@ -478,8 +516,8 @@ class Detector:
             key = "fake"
         elif expired:
             key = "expired"
-        elif risk >= SUSPICIOUS:
-            key = "suspicious"
+        elif risk >= SUSPICIOUS or any(e["weight"] >= 20 for e in ev):
+            key = "suspicious"   # a strong warning on its own is enough to ask for a second look
         elif med is not None and passes >= 2:
             key = "ok"
         elif risk > 0 and med is not None:

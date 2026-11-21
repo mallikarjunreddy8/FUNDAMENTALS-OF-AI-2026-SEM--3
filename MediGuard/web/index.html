@@ -69,6 +69,9 @@
         <label>Barcode digits
           <input id="fBarcode" inputmode="numeric" placeholder="13 digits under the bars" autocomplete="off">
         </label>
+        <label>Price paid (₹, whole pack)
+          <input id="fPrice" inputmode="decimal" placeholder="optional" autocomplete="off">
+        </label>
         <label>Mfg. date
           <input id="fMfg" type="month">
         </label>
@@ -95,6 +98,7 @@
       <div id="verdict" class="verdict"></div>
       <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
       <p id="riskText" class="risk-text"></p>
+      <p id="source" class="risk-text"></p>
       <button id="btnSpeak" class="btn ghost small">🔊 Read aloud</button>
 
       <div id="medInfo" class="med-info"></div>

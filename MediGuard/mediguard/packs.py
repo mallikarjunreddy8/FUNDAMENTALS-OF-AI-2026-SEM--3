@@ -118,7 +118,16 @@ def make_pack(db, row_i, quality, today, rng=random, batch=None, has_qr=True, pr
         "text": "\n".join(lines), "codes": codes, "checklist": checklist,
         "manual": {"price": round(mrp * price_factor, 2)}, "today": today.isoformat(),
         "quality": quality, "batch": batch, "row": row_i,
+        # what the user types in step 2 after checking the camera's reading against the pack
+        "confirmed": {"brand": " ".join(words), "batch": batch, "mfg": f"{mfg[0]}-{mfg[1]:02d}",
+                      "exp": f"{exp[0]}-{exp[1]:02d}", "manufacturer": maker},
     }
+
+
+def confirm(pack):
+    """The user corrects the camera's reading (step 2 of the app)."""
+    pack["manual"] = {**pack["manual"], **pack["confirmed"]}
+    return pack
 
 
 def ocr_noise(text, rate, rng=random):

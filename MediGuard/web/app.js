@@ -14,7 +14,7 @@
     lastReport: null,
   };
 
-  const FIELDS = { brand: "fBrand", batch: "fBatch", barcode: "fBarcode", mfg: "fMfg", exp: "fExp", manufacturer: "fMaker" };
+  const FIELDS = { brand: "fBrand", batch: "fBatch", barcode: "fBarcode", price: "fPrice", mfg: "fMfg", exp: "fExp", manufacturer: "fMaker" };
 
   // ---------------------------------------------------------------- helpers
   function setStatus(msg, busy) {
@@ -222,9 +222,27 @@
   const ICONS = { danger: "⛔", warn: "⚠️", info: "ℹ️", pass: "✅" };
   const METER = { danger: "var(--danger)", warn: "var(--warn)", ok: "var(--ok)", info: "var(--info)" };
 
-  function runCheck() {
-    const report = MediAgent.check(readForm());
+  // With server.py running, the check uses the full 253,973-medicine dataset; otherwise the built-in list.
+  async function serverCheck(obs) {
+    if (!location.protocol.startsWith("http")) return null;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch("api/check", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(obs), signal: ctrl.signal });
+      clearTimeout(timer);
+      return res.ok ? await res.json() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function runCheck() {
+    const obs = readForm();
+    const report = (await serverCheck(obs)) || Object.assign(MediAgent.check(obs),
+      { source: `Offline check (built-in list of ${MediAgent.brands().length} medicines)` });
     state.lastReport = report;
+    $("source").textContent = report.source || "";
     const v = report.verdict;
 
     $("verdict").className = "verdict tone-" + v.tone;
@@ -239,7 +257,8 @@
       $("medInfo").replaceChildren(
         el("b", {}, report.match === "lookalike" ? `Pretends to be: ${m.brand}` : m.brand),
         el("div", {}, `Composition: ${m.composition}`),
-        el("div", {}, `${m.form} · ${m.use} · by ${m.company}${m.rx ? " · prescription only" : ""}`));
+        el("div", {}, [m.form, m.use, m.pack, m.price ? `MRP ₹${m.price}` : "", `by ${m.company}`,
+          m.rx ? "prescription only" : "", m.discontinued ? "discontinued" : ""].filter(Boolean).join(" · ")));
     }
 
     $("evidence").replaceChildren(...report.evidence.map((e) => el("li", { class: "lv-" + e.level },
@@ -262,7 +281,8 @@
       a.generic ? el("span", { class: "tag generic" }, "Generic · low cost") : null,
       a.original ? el("span", { class: "tag original" }, "Genuine pack from a licensed shop") : null,
       a.rx ? el("span", { class: "tag rx" }, "Rx") : null,
-      el("small", {}, `${a.composition} · ${a.company}`));
+      a.saving > 0 ? el("span", { class: "tag generic" }, `${a.saving}% cheaper per tablet`) : null,
+      el("small", {}, [a.composition, a.company, a.price ? `₹${a.price} (${a.pack})` : ""].filter(Boolean).join(" · ")));
   }
 
   function speak() {

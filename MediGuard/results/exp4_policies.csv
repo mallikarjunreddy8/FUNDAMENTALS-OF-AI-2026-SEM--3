@@ -1,0 +1,26 @@
+policy,S&F taken (%),S&F sold (%),Caught by app (%),False alarms (%),Harm per 1000 doses,Shops closed,Alerted batches,caught substandard (%),caught crude (%),caught copied_qr (%),caught perfect (%)
+"Nothing (no app, routine inspection)",9.42,9.42,,,36.8,8,17,,,,
+"Nothing (no app, routine inspection)",10.094,10.094,,,42.35,4,12,,,,
+"Nothing (no app, routine inspection)",12.912,12.912,,,57.42,9,17,,,,
+"Nothing (no app, routine inspection)",8.684,8.684,,,36.27,7,15,,,,
+"Nothing (no app, routine inspection)",10.529,10.529,,,45.72,5,13,,,,
+Inspectors use reports only,8.878,8.878,,,35.29,11,19,,,,
+Inspectors use reports only,8.985,8.985,,,35.66,11,20,,,,
+Inspectors use reports only,11.145,11.145,,,45.4,12,19,,,,
+Inspectors use reports only,9.246,9.246,,,38.68,11,18,,,,
+Inspectors use reports only,9.915,9.915,,,39.27,12,21,,,,
+App only (50%),7.491,9.465,42.5,7.55,32.31,9,17,41.4,100.0,58.3,27.9
+App only (50%),7.787,9.71,54.0,8.13,34.97,9,18,44.6,100.0,54.2,48.5
+App only (50%),10.709,12.727,45.9,7.72,49.84,8,15,54.5,100.0,63.6,24.4
+App only (50%),9.109,10.576,44.0,7.67,42.63,8,17,35.1,100.0,68.8,32.1
+App only (50%),7.22,8.83,50.7,7.78,34.05,6,16,49.2,100.0,63.0,18.2
+App + reports + led inspection,6.802,8.065,37.1,7.43,25.87,9,15,26.3,100.0,75.0,32.5
+App + reports + led inspection,8.536,10.123,41.9,7.64,38.19,12,20,36.3,100.0,68.2,27.3
+App + reports + led inspection,7.354,8.605,41.4,8.91,33.4,13,22,37.0,100.0,70.6,19.4
+App + reports + led inspection,6.364,7.989,53.4,7.45,27.32,12,21,48.1,100.0,66.7,26.3
+App + reports + led inspection,5.77,7.005,55.0,7.95,23.95,11,18,46.4,94.1,77.8,33.3
+App + reports + 2 inspectors,6.076,8.397,58.7,9.42,21.04,11,23,53.9,100.0,50.0,71.4
+App + reports + 2 inspectors,7.456,9.043,46.8,7.56,30.12,16,28,44.6,92.9,70.0,14.3
+App + reports + 2 inspectors,7.25,9.378,65.2,7.46,29.18,10,21,62.0,100.0,85.7,48.5
+App + reports + 2 inspectors,5.158,7.11,69.2,6.9,19.99,11,22,70.5,100.0,57.9,28.6
+App + reports + 2 inspectors,6.117,8.379,68.1,6.89,24.76,17,28,72.1,100.0,66.7,34.8

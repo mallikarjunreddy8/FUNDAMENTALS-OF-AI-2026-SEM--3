@@ -143,7 +143,8 @@ class Patient(mesa.Agent):
             return None
         weights = []
         for p in shops:
-            w = self.trust.get(p, 0.7) * (1 + 0.5 * m.public_trust(p))
+            # even a distrusted shop keeps a small chance: people still need their medicine
+            w = max(0.05, self.trust.get(p, 0.7)) * (1 + 0.5 * m.public_trust(p))
             if self.price_sensitive and not p.licensed:
                 w *= 1.6                                 # cheaper
             weights.append(w / (1 + distance(p.pos, self.pos) / 4))
@@ -167,6 +168,9 @@ class Patient(mesa.Agent):
         flagged = False
         if self.has_app:   # only an app user's pack needs to be "printed" and checked
             pack = m.pack_for(shop, row, quality)
+            pack["text"] = P.ocr_noise(pack["text"], m.ocr_error, m.random)
+            if m.random.random() < m.confirm_prob:
+                P.confirm(pack)
             verdict = m.detector.check(pack, with_alternatives=False)["verdict"]["key"]
             flagged = verdict in ("fake", "suspicious", "expired")
             m.count("scanned", quality)
@@ -186,6 +190,9 @@ class Patient(mesa.Agent):
         if m.random.random() < HARM[quality]:
             m.harm += 1
             self.trust[shop] = max(0.0, self.trust.get(shop, 0.7) - 0.2)   # "it didn't work"
+            if m.random.random() < m.report_prob * 0.2:                     # some complain to the shop / doctor
+                shop.reports += 1
+                m.reports += 1
         else:
             self.trust[shop] = min(1.0, self.trust.get(shop, 0.7) + 0.02)
 

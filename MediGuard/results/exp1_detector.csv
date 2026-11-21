@@ -1,0 +1,41 @@
+mode,OCR error rate,pack,flagged (%),n
+camera only,0.0,genuine,0.0,400
+camera only,0.0,substandard,0.0,400
+camera only,0.0,crude,100.0,400
+camera only,0.0,copied_qr,59.2,400
+camera only,0.0,perfect,10.5,400
+camera only,0.02,genuine,14.0,400
+camera only,0.02,substandard,14.5,400
+camera only,0.02,crude,99.2,400
+camera only,0.02,copied_qr,66.2,400
+camera only,0.02,perfect,22.2,400
+camera only,0.05,genuine,24.5,400
+camera only,0.05,substandard,28.2,400
+camera only,0.05,crude,98.5,400
+camera only,0.05,copied_qr,70.2,400
+camera only,0.05,perfect,34.2,400
+camera only,0.1,genuine,42.2,400
+camera only,0.1,substandard,43.5,400
+camera only,0.1,crude,93.2,400
+camera only,0.1,copied_qr,68.2,400
+camera only,0.1,perfect,53.0,400
+camera + user confirms,0.0,genuine,0.0,400
+camera + user confirms,0.0,substandard,0.0,400
+camera + user confirms,0.0,crude,100.0,400
+camera + user confirms,0.0,copied_qr,56.2,400
+camera + user confirms,0.0,perfect,9.8,400
+camera + user confirms,0.02,genuine,3.5,400
+camera + user confirms,0.02,substandard,6.5,400
+camera + user confirms,0.02,crude,100.0,400
+camera + user confirms,0.02,copied_qr,61.8,400
+camera + user confirms,0.02,perfect,17.5,400
+camera + user confirms,0.05,genuine,10.0,400
+camera + user confirms,0.05,substandard,10.2,400
+camera + user confirms,0.05,crude,100.0,400
+camera + user confirms,0.05,copied_qr,64.8,400
+camera + user confirms,0.05,perfect,21.8,400
+camera + user confirms,0.1,genuine,18.8,400
+camera + user confirms,0.1,substandard,22.5,400
+camera + user confirms,0.1,crude,99.8,400
+camera + user confirms,0.1,copied_qr,65.0,400
+camera + user confirms,0.1,perfect,31.0,400

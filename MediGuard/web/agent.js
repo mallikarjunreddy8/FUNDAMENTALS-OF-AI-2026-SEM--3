@@ -527,7 +527,7 @@
     let key;
     if (otherDanger >= HIGH_RISK || (risk >= HIGH_RISK && !expired)) key = "fake";
     else if (expired) key = "expired";
-    else if (risk >= SUSPICIOUS) key = "suspicious";
+    else if (risk >= SUSPICIOUS || ev.some((e) => e.weight >= 20)) key = "suspicious";  // one strong warning is enough
     else if (reasoning.medicine && passes >= 2) key = "ok";
     else if (risk > 0 && reasoning.medicine) key = "suspicious";
     else key = "unknown";

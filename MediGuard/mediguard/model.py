@@ -42,7 +42,8 @@ WINDOW = 30                                                      # days used for
 class MediGuardModel(mesa.Model):
     def __init__(self, n_patients=200, n_pharmacies=12, unlicensed_share=0.25, scenario=DEFAULT_SCENARIO,
                  app_adoption=0.3, report_prob=0.5, n_inspectors=1, intelligence_led=True, adaptive=True,
-                 n_counterfeiters=2, qr_share=0.5, buy_every=10, width=20, height=20, seed=None, db=None):
+                 n_counterfeiters=2, qr_share=0.5, buy_every=10, ocr_error=0.02, confirm_prob=0.7,
+                 width=20, height=20, seed=None, db=None):
         super().__init__(seed=seed)
         self.db = db or D.load(verbose=False)
         self.detector = Detector(self.db, alerts={})       # this town's own drug alert list
@@ -55,6 +56,8 @@ class MediGuardModel(mesa.Model):
         self.intelligence_led = intelligence_led
         self.adaptive = adaptive
         self.buy_every = buy_every
+        self.ocr_error = ocr_error          # share of characters the phone camera misreads
+        self.confirm_prob = confirm_prob    # share of app users who check the details in step 2
         self.unlicensed_accept, self.licensed_accept = 0.8, 0.05
         self.closure_days, self.seizure_cost = 30, 60.0
 

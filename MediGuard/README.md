@@ -1,97 +1,99 @@
-# 💊 MediGuard – Fake Medicine Detection Agent
+# 💊 MediGuard – Fake Medicine Detection with AI Agents
 
-Fake and substandard medicines harm patients, and they are hard to spot. **MediGuard** is a phone app
-(it runs in the browser, so there's nothing to install) that:
+**Social problem.** WHO estimates that at least **1 in 10 medicines in low- and middle-income countries is
+substandard or falsified** (S&F). A meta-analysis of 96 studies puts it at **13.6 %** (Ozawa et al., 2018). In India,
+the National Drug Survey 2014-16 found **3.16 %** of retail samples not of standard quality and **0.0245 %** spurious.
+Patients cannot see the difference, and fakes cause treatment failure, drug resistance and death.
 
-1. **Scans** the medicine with the phone camera: barcode, QR code, GS1 DataMatrix, plus a photo of the strip
-   that is read with OCR (batch no., Mfg/Exp dates, maker, strength).
-2. **Reasons** like an expert pharmacist with 8 rule groups and gives a **risk score** and a verdict:
-   *No red flags found*, *Suspicious*, *HIGH RISK – likely fake*, *Expired*, or *Not enough information*.
-3. **Explains** every red flag in plain words, and can **read the result aloud** for people who find reading hard.
-4. **Suggests alternatives with the same composition** (same salts and strength), with the low-cost
-   **generic (Jan Aushadhi)** option first, and tells the user **how to report** the fake.
+**What MediGuard is.** A practical system with three parts, all built on one AI agent:
 
-Everything runs on the phone. Photos are never uploaded.
-
-## Run it
-
-| Where | How |
-|---|---|
-| **On your PC** | Double-click `run.bat`, then open http://localhost:8000 |
-| **Any terminal** | `cd MediGuard` then `python -m http.server 8000`, open http://localhost:8000 |
-| **On your phone (best)** | Publish with GitHub Pages (Settings → Pages → branch, root). Open `https://<user>.github.io/<repo>/MediGuard/` on the phone and choose *Add to Home screen*. |
-
-- The **live camera** needs `https://` or `localhost` (a browser rule). On a plain `http://` address,
-  the **📷 Photo of strip / box** button still works – it opens the phone's camera app.
-- Reading text from photos downloads the OCR model (~5 MB) the first time, so it needs internet once.
-  Barcode / QR scanning and the agent itself work offline.
-- No strip at hand? Press a **demo** button: ✅ Genuine, ❌ Fake, ⚠️ Copied QR, ⌛ Expired.
-
-Tests: `node test/agent.test.js` (17 tests).
-
-## How the agent thinks
-
-```
- PERCEIVE                     REASON (rules → evidence + weight)          DECIDE            ACT
- ─────────                    ─────────────────────────────────           ──────            ───
- barcode / QR / DataMatrix ─┐  1 Which medicine? (fuzzy brand match)      risk = Σ weights  verdict + reasons
- OCR text of the strip     ─┼─ 2 Strength & salts match the brand?   ───► ≥ 60  likely fake ► what to do / report
- typed details             ─┤  3 Manufacturer matches?                    ≥ 30  suspicious   same-composition
- "what do you notice" ticks ┘  4 Batch on the drug-alert list?            else  no red flags   alternatives
-                               5 Dates: expired / Mfg in future / too long shelf life           read aloud
-                               6 Barcode check digit; QR vs print agree?
-                               7 Prescription (Rx) warning printed?
-                               8 What the user noticed (seal, print, price, seller…)
-```
-
-| Red flag the agent looks for | Why it matters | Weight |
+| Part | What it does | Tech |
 |---|---|---|
-| Batch on the CDSCO drug-alert list | Officially reported spurious / not-of-standard-quality batch | 70 |
-| EXPIRED | Unsafe, whether fake or not | 50 |
-| QR / barcode batch ≠ printed batch | Fakers copy a QR from one real pack onto thousands | 45 |
-| Barcode fails the GS1 check digit | Real barcodes always pass; made-up numbers usually don't | 40 |
-| Mfg date in the future / Exp before Mfg | Impossible on a real label | 40 |
-| Brand name 1–2 letters off (*Crosin* vs *Crocin*) | Classic lookalike trick. OCR mix-ups like 0/O are ignored | 35 |
-| Strength doesn't match the brand | e.g. "Dolo 650" printed with 500 mg | 30 |
-| Different manufacturer | Brand belongs to another company | 30 |
-| User ticks (broken seal, blurry print, too cheap, no bill…) | What a careful buyer notices | 15–25 |
+| 📱 **Phone app** (`web/`) | Scan a strip: barcode / QR / GS1 DataMatrix + OCR of the print. The agent gives a verdict with reasons, reads it aloud, and suggests cheaper medicines with the **same composition**. Works offline. | HTML/JS, html5-qrcode, tesseract.js |
+| 🧠 **Detection agent** (`mediguard/detector.py`) | Rule-based expert agent (perceive → reason → decide → act) checked against the **real 253,973-medicine dataset of India**: lookalike names, wrong maker/strength, discontinued brands, price below MRP, drug-alert batches, GS1 check digits, QR-vs-print mismatch, impossible dates. | Python, pandas, rapidfuzz |
+| 🏙 **Town simulation** (`mediguard/model.py`) | **Mesa agent-based model**: patients, pharmacies, adaptive counterfeiters and drug inspectors. Every app scan runs the real detection agent. Answers: *how much bad medicine is avoided if X % of people use the app, and how do counterfeiters react?* | Mesa 3, Solara |
 
-The agent **never says "Genuine"**: only a lab test can prove that. Its best answer is *"No red flags found"*.
+## Results (from `python experiments.py`, 5 runs × 180 days per point)
 
-**Alternatives** are found by composition: every medicine's salts + strengths become a key such as
-`AMOXYCILLIN 500MG + CLAVULANIC ACID 125MG`, and all brands with the same key are listed. When a pack
-looks fake, the genuine brand from a licensed shop is also offered.
+| Finding | Number |
+|---|---|
+| Crude fakes caught by the agent | **100 %** (93–99 % from the camera alone with 2–10 % misread characters) |
+| False alarms on genuine packs (2 % of characters misread, user confirms details) | **3.5 %** (14 % if the user does not confirm) |
+| Bad medicine actually taken, WHO 2017 scenario, 0 % → 100 % app use | **9.6 % → 6.3 %** (−35 %) |
+| Harm per 1000 doses, same scenario | **38.9 → 24.5** (−37 %) |
+| Best policy: app + patient reports + intelligence-led inspection (2 inspectors) | **10.3 % → 6.4 %** bad medicine taken |
+| Arms race: counterfeiters move to perfect clones | **15 % → 100 %** of their production in ~140 days; app catch rate 62 % vs 85 % against non-adapting fakers |
+
+Charts and CSV files are in `results/`. The full write-up with the literature review is in **`docs/REPORT.md`**.
+
+## Run it (Windows)
+
+Double-click **`run.bat`**. The first time it makes a `venv`, installs the packages and downloads the dataset
+(32 MB). Then choose:
+
+1. **Phone app + full database** → http://localhost:8000 (try the demo buttons)
+2. **Town simulation dashboard** → http://localhost:8765 (press ▶, move the sliders, Reset)
+3. **Run all experiments** → `results/` (about 5 minutes)
+4. **Run the tests**
+
+Any OS, in a terminal:
+
+```bash
+pip install -r requirements.txt
+python -m mediguard.dataset --download   # gets the dataset into data/
+python server.py                         # phone app + API      http://localhost:8000
+solara run sim_app.py                    # simulation dashboard http://localhost:8765
+python experiments.py                    # all experiments -> results/   (--quick for a short run)
+python -m pytest -q tests                # 25 Python tests
+node web/test/agent.test.js              # 17 tests of the offline phone agent
+```
+
+**On a phone:** open `http://<your-PC-IP>:8000` on the same Wi-Fi. The 📷 photo button works everywhere;
+the live camera needs `https` (for example GitHub Pages: `https://<user>.github.io/<repo>/MediGuard/web/`, which runs
+the offline agent with the built-in list of 61 medicines).
+
+## How the agent decides
+
+```
+PERCEIVE                         REASON (rule -> evidence + weight)                    DECIDE        ACT
+camera OCR text  ─┐   1 name: exact / lookalike (1-2 letters off a real brand) / unknown   risk = Σ w     verdict + reasons
+barcode / QR /   ─┼─► 2 discontinued in the dataset           3 strength matches salts ─► ≥60 fake    alternatives (same
+GS1 DataMatrix    │   4 maker matches                           5 price vs MRP              ≥30 or one   salts, strength,
+typed details    ─┤   6 batch on CDSCO alert list             7 dates (expired, future)      strong flag  form; cheapest)
+what user noticed┘    8 GS1 check digit, QR vs print agree    9 seal / print / seller        = suspicious report: PvPI 1800-180-3024
+```
+
+It never says "Genuine" – only a lab can prove that – its best verdict is **"No red flags found"**.
 
 ## Files
 
-| File | What it is |
-|---|---|
-| `agent.js` | The agent: perceive → reason → decide → act |
-| `data/medicines.js` | Knowledge base: 60+ brands/generics in 21 compositions, salt spellings, drug-alert list, checklist |
-| `data/samples.js` | Demo packs (also used by the tests) |
-| `app.js`, `index.html`, `style.css` | The phone web page |
-| `lib/` | Barcode scanner (html5-qrcode) and OCR (tesseract.js), both Apache-2.0 |
-| `sw.js`, `manifest.json` | Lets it work offline and install like an app |
+```
+MediGuard/
+├── mediguard/
+│   ├── dataset.py     loads + indexes the 253,973 medicines (brand index, composition index)
+│   ├── detector.py    the detection agent (Python)
+│   ├── packs.py       builds realistic genuine / substandard / fake packs from real products
+│   ├── agents.py      Mesa agents: Patient, Pharmacy, Counterfeiter, Inspector
+│   └── model.py       Mesa model + research scenarios (WHO, Ozawa, NDS India)
+├── sim_app.py         Solara dashboard for the simulation
+├── server.py          Flask: serves the phone app + /api/check, /api/alternatives, /api/search
+├── experiments.py     the 4 experiments -> results/
+├── web/               phone app (offline agent in agent.js, 61 medicines built in)
+├── data/drug_alerts.csv   drug alert list (SAMPLE rows: replace with CDSCO's monthly list)
+├── tests/             pytest
+├── results/           charts + CSV
+└── docs/REPORT.md     report: problem, literature, dataset, method, results, limits, references
+```
 
-**Add a medicine:** copy one block in `data/medicines.js`.
-**Update the alert list:** the two entries in `BATCH_ALERTS` are *samples*. Replace them with the monthly
-*Drug Alert* list from [cdsco.gov.in](https://cdsco.gov.in) or your State Drug Controller.
+## Dataset
 
-## Report a fake medicine (India)
+**A-Z Medicine Dataset of India** (Shudhanshu Singh, Kaggle): 253,973 medicines, 7,648 manufacturers, price,
+pack size, discontinued flag, composition. It is not stored in git; `python -m mediguard.dataset --download` fetches
+a public copy, or download it from
+[Kaggle](https://www.kaggle.com/datasets/shudhanshusingh/az-medicine-dataset-of-india) into `data/`.
 
-- Pharmacovigilance Programme of India (PvPI) helpline **1800-180-3024** (toll free), or the *ADR PvPI* app
-- Your **State Drug Controller** or **CDSCO** – give the batch no., shop name and bill
+## Important
 
-## Limits
-
-- It is a screening tool, not a lab test. A perfect copy with a valid barcode can pass.
-- The medicine list is small (a college project). Unknown brands get only the general checks.
-- OCR can misread poor photos – always check the filled-in details before pressing *Check*.
-- Ask a doctor or pharmacist before switching to any alternative.
-
-## Ideas for next steps
-
-- Hindi / Telugu / Tamil interface and voice
-- Load the CDSCO alert list and a full drug database automatically
-- Check the QR code against the manufacturer's official verification page
-- An image model trained on genuine vs fake packaging photos
+MediGuard is a screening tool for a college project, not a lab test or medical advice. Always buy from licensed
+pharmacies, keep the bill and ask a doctor or pharmacist before switching medicines. Report suspected fakes to the
+**PvPI helpline 1800-180-3024** or your State Drug Controller / CDSCO.
