@@ -34,6 +34,10 @@ same composition, and (d) a simulation that estimates how much harm such an app 
 | Ackland et al. 2019, *JASSS* [7] | Agent-based model of a self-organising pharmaceutical supply chain with poor-quality medicines: trust built from experience shapes the market. | Patients in our model choose shops by trust built from experience and reports. |
 | Kazil, Masad & Crooks 2020, *SBP-BRiMS* [8] | The Mesa framework for agent-based modelling in Python. | Our town model is built in Mesa 3 with a Solara dashboard. |
 | CDSCO guidance on spurious drugs [9] | How regulators identify and verify spurious drugs; monthly drug alerts. | Rules for batch / maker / label checks; the alert-list rule. |
+| EU Falsified Medicines Directive 2011/62/EU + Delegated Regulation (EU) 2016/161 [11] | Since 9 Feb 2019 most prescription medicines in the EU carry a **unique identifier in a 2D DataMatrix** plus an anti-tampering device, checked against a central database before dispensing. | The GS1 DataMatrix parser (GTIN, expiry, batch, serial); "verify each pack online" is our main future-work step. |
+| SMS scratch-code verification: mPedigree / Sproxil (Ghana, Nigeria, 2010s) [12] | Patient scratches a code on the pack and texts it; the reply says genuine or not. Pilots were reported widely, but we found **no peer-reviewed study** of their effect on fake medicines taken. | Shows the demand for patient-side checking; our simulation gives one way to estimate the effect. |
+| Ciapponi et al. 2021, *PLoS ONE* – systematic review of mobile apps [13] | Searched literature and app stores: found **only one report on the accuracy** of an app for detecting S&F medicines; most apps identify pills by imprint, colour or shape. A large evidence gap. | Why we measure accuracy ourselves (Experiment 1) and report false alarms honestly. |
+| MedSnap evaluation (Hymel et al., medRxiv 2020, Laos) [14] | Smartphone computer vision on tablets; 48 tests of authentic and falsified samples, 100 % sensitive and specific (preprint, small sample). | A future image model could catch what packaging rules cannot (perfect clones, substandard look). |
 
 ## 3. Dataset
 
@@ -106,6 +110,13 @@ Ozawa 2018. For WHO and Ozawa the split between falsified and substandard is not
 
 All numbers from `python experiments.py` (results in `results/`). Mean of 5 runs, 180 days, unless stated.
 
+> **What "runs", "seeds" and "days" mean.** The simulation uses random numbers (who buys where, which pack is fake,
+> what the camera misreads). A **seed** is the starting number of the random generator: the same seed always gives
+> exactly the same run, so results can be repeated; a different seed gives a different but equally possible run.
+> We run every setting with **5 seeds** and report the **mean ± standard deviation**, so one lucky or unlucky run
+> cannot mislead us. One **step = one day**; **180 days** ≈ 6 months of life in the town (360 days for the arms race,
+> because counterfeiters need time to adapt).
+
 ### Experiment 1 – What can the phone agent catch? (400 packs per bar, built from real products)
 
 | Pack | camera only, 0 % / 2 % / 5 % / 10 % misread | camera + user confirms |
@@ -164,15 +175,44 @@ and inspectors turn reports into lab results and alert-list entries that every p
 
 ![Experiment 4](../results/exp4_policies.png)
 
+### Experiment 5 – Some medicines have a QR code, some don't (WHO scenario, 50 % app use)
+
+In India today only some medicines carry a QR code (the top-300 brands since 2023, whole drug categories from
+2027-28). How does the share of QR-coded medicines change what the app can do?
+
+| Medicines with a QR code | Copied-QR fakes caught | All bad packs caught | False alarms | Bad medicine taken |
+|---|---|---|---|---|
+| 0 % | 32.5 % | 57.5 % | 9.0 % | 6.91 % |
+| 25 % | 46.8 % | 52.1 % | 8.8 % | 7.00 % |
+| 50 % | 66.4 % | 52.3 % | 8.2 % | 6.49 % |
+| 75 % | 79.2 % | 64.0 % | 6.9 % | 5.79 % |
+| 100 % | **99.2 %** | **65.2 %** | **6.4 %** | 6.27 % |
+
+**How the agent handles both cases:**
+
+* **Pack with a QR / DataMatrix code:** the agent reads batch, expiry, brand and maker from the code and **compares
+  them with the printed text**. A copied QR code (from another pack) gives a mismatch, which is a strong red flag. The
+  code's data is exact, so it also corrects camera misreads; that is why false alarms fall from 9 % to 6.4 %.
+* **Pack without a code:** the agent can only use the printed text and the dataset (name, maker, strength, price,
+  dates, alert list, the 13-digit barcode's check digit). Copied-QR fakes then look like perfect clones; only about
+  a third are caught (by price and the alert list).
+
+So the QR mandate makes a phone check much stronger. With more QR codes, the share of bad medicine taken falls
+(6.9 % → 5.8–6.3 %); the curve is noisy because copied-QR packs are only a quarter of the fakes in this setting.
+
+![Experiment 5](../results/exp5_qr.png)
+
 ## 7. Discussion
 
 1. **A phone can screen, not certify.** It reliably catches crude and copied-QR fakes. Substandard tablets and perfect
    clones need a lab, so the agent never says "genuine".
-2. **Counterfeiters adapt.** Packaging checks alone lose power over time; regulators, alert lists and (in future)
+2. **QR codes make the phone check much stronger** (Experiment 5): copied-QR fakes are caught 99 % of the time when
+   every medicine has a code, against 33 % when none do.
+3. **Counterfeiters adapt.** Packaging checks alone lose power over time; regulators, alert lists and (in future)
    server-side verification of each pack's unique QR are needed to stay ahead.
-3. **Real data matters.** Using 253,973 real names exposed false matches that a toy list hid, and gave real prices
+4. **Real data matters.** Using 253,973 real names exposed false matches that a toy list hid, and gave real prices
    for the "far below MRP" and "cheaper alternative" features.
-4. **Camera quality is the bottleneck.** Asking the user to confirm the details is the single best fix.
+5. **Camera quality is the bottleneck.** Asking the user to confirm the details is the single best fix.
 
 ## 8. Limitations
 
@@ -203,3 +243,7 @@ calibrate the simulation with district-level survey data.
 8. Kazil J, Masad D, Crooks A. Utilizing Python for agent-based modeling: the Mesa framework. In: *SBP-BRiMS 2020*, LNCS, pp. 308-317. https://doi.org/10.1007/978-3-030-61255-9_30
 9. CDSCO. *Guidance for Identification and Verification of Spurious Drugs*. https://cdsco.gov.in/opencms/export/sites/CDSCO_WEB/Pdf-documents/Guidance-for-Identification-and-Verification-of-Spurious-Drugs.pdf
 10. Singh S. *A-Z Medicine Dataset of India* (Kaggle). https://www.kaggle.com/datasets/shudhanshusingh/az-medicine-dataset-of-india
+11. Directive 2011/62/EU (Falsified Medicines Directive) and Commission Delegated Regulation (EU) 2016/161 on safety features, applicable from 9 Feb 2019. https://www.ema.europa.eu/nl/news/new-safety-features-medicines-sold-eu
+12. GSMA. *Sproxil case study* (mobile product authentication). https://www.gsma.com/iot/mhealth-newscat/sproxil-case-study ; HP and mPedigree anti-counterfeiting trial, https://www.fiercepharma.com/manufacturing/hp-mpedigree-launch-anti-counterfeiting-trial (industry / press sources, not peer-reviewed)
+13. Ciapponi A, Donato M, Gülmezoglu AM, Alconada T, Bardach A. Mobile apps for detecting falsified and substandard drugs: a systematic review. *PLoS ONE* 2021;16(2):e0246061. https://doi.org/10.1371/journal.pone.0246061
+14. Hymel P Jr, Wong DY, Zheng N, Brossette SE. An evaluation of the MedSnap medication authentication system (preprint, not peer-reviewed). *medRxiv* 2020.05.06.20093427. https://www.medrxiv.org/content/10.1101/2020.05.06.20093427v3

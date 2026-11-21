@@ -23,6 +23,10 @@ Patients cannot see the difference, and fakes cause treatment failure, drug resi
 | Harm per 1000 doses, same scenario | **38.9 → 24.5** (−37 %) |
 | Best policy: app + patient reports + intelligence-led inspection (2 inspectors) | **10.3 % → 6.4 %** bad medicine taken |
 | Arms race: counterfeiters move to perfect clones | **15 % → 100 %** of their production in ~140 days; app catch rate 62 % vs 85 % against non-adapting fakers |
+| More medicines with a QR code (0 % → 100 %) | copied-QR fakes caught **33 % → 99 %**, false alarms 9 % → 6.4 % |
+
+"5 runs × 180 days" means: every setting is simulated 5 times with different random **seeds** (each seed is one
+possible, repeatable version of events), for **180 simulated days** (one step = one day), and we report the average.
 
 Charts and CSV files are in `results/`. The full write-up with the literature review is in **`docs/REPORT.md`**.
 
@@ -33,7 +37,7 @@ Double-click **`run.bat`**. The first time it makes a `venv`, installs the packa
 
 1. **Phone app + full database** → http://localhost:8000 (try the demo buttons)
 2. **Town simulation dashboard** → http://localhost:8765 (press ▶, move the sliders, Reset)
-3. **Run all experiments** → `results/` (about 5 minutes)
+3. **Run all experiments** → `results/` (about 6 minutes)
 4. **Run the tests**
 
 Any OS, in a terminal:
@@ -77,7 +81,7 @@ MediGuard/
 │   └── model.py       Mesa model + research scenarios (WHO, Ozawa, NDS India)
 ├── sim_app.py         Solara dashboard for the simulation
 ├── server.py          Flask: serves the phone app + /api/check, /api/alternatives, /api/search
-├── experiments.py     the 4 experiments -> results/
+├── experiments.py     the 5 experiments -> results/
 ├── web/               phone app (offline agent in agent.js, 61 medicines built in)
 ├── data/drug_alerts.csv   drug alert list (SAMPLE rows: replace with CDSCO's monthly list)
 ├── tests/             pytest

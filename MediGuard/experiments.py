@@ -10,6 +10,9 @@ Experiment 2  Does the app help a town?          Mesa model, share of people usi
               in the 4 research scenarios -> share of bad medicine actually taken, harm
 Experiment 3  Arms race                          how counterfeiters change their fakes over time
 Experiment 4  Policies                           app alone / inspectors alone / both / adaptive or not
+Experiment 5  QR codes                           some medicines have a QR code, some don't
+
+    python experiments.py --only 5   just one experiment (or e.g. --only 15)
 """
 
 import datetime as dt
@@ -196,13 +199,48 @@ def exp4_policies(db):
     return df
 
 
+def exp5_qr(db):
+    """Some medicines have a QR code, some don't. What difference does it make?"""
+    print("\nExperiment 5: share of medicines with a QR code")
+    levels = [0, 0.25, 0.5, 0.75, 1.0]
+    records = []
+    for qr in levels:
+        for seed in range(SEEDS):
+            s = run(db, scenario="LMIC average (WHO 2017)", app_adoption=0.5, qr_share=qr, adaptive=False,
+                    seed=seed).summary()
+            records.append({"QR share": qr, "seed": seed, **s})
+    df = pd.DataFrame(records)
+    df.to_csv(os.path.join(OUT, "exp5_qr.csv"), index=False)
+    cols = ["S&F taken (%)", "Caught by app (%)", "caught copied_qr (%)", "False alarms (%)"]
+    agg = df.groupby("QR share")[cols].mean().round(2)
+    print(agg.to_string())
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    g = df.groupby("QR share")
+    for k, col in enumerate(["caught copied_qr (%)", "Caught by app (%)"]):
+        axes[0].plot(agg.index * 100, agg[col], marker="o", color=COLORS[k],
+                     label={"caught copied_qr (%)": "copied-QR fakes caught",
+                            "Caught by app (%)": "all bad packs caught"}[col])
+    axes[0].set_ylabel("caught by the app (%)")
+    axes[0].legend(frameon=False, fontsize=8)
+    mean, std = g["S&F taken (%)"].mean(), g["S&F taken (%)"].std()
+    axes[1].errorbar(mean.index * 100, mean, yerr=std, marker="o", color=COLORS[2], capsize=4)
+    axes[1].set_ylabel("bad medicine actually taken (%)")
+    for ax in axes:
+        ax.set_xlabel("medicines that carry a QR code (%)")
+        ax.spines[["top", "right"]].set_visible(False)
+    fig.suptitle("Experiment 5 - some medicines have a QR code, some don't (WHO 2017, 50% use the app)", y=1.02)
+    save(fig, "exp5_qr.png")
+    return df
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
     database = D.load()
     print(f"Dataset: {len(database):,} medicines")
-    exp1_detector(database)
-    exp2_adoption(database)
-    exp3_arms_race(database)
-    exp4_policies(database)
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else "12345"
+    for n, fn in zip("12345", (exp1_detector, exp2_adoption, exp3_arms_race, exp4_policies, exp5_qr)):
+        if n in only:
+            fn(database)
     print(f"\nAll done in {time.time() - t0:.0f} s. Results are in {OUT}")
