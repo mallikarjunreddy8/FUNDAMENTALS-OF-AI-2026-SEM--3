@@ -213,3 +213,15 @@ summary small { color: var(--muted); font-weight: 400; }
 .tab-scan svg { width: 30px; height: 30px; padding: 4px; margin-top: -2px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); box-sizing: content-box; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- Android app: update banner ---------- */
+.update-banner {
+  position: sticky; top: 0; z-index: 7;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  background: var(--info-soft); color: var(--info); border-bottom: 1px solid var(--line);
+}
+.update-banner > div { flex: 1 1 200px; min-width: 0; }
+.update-banner strong { display: block; }
+.update-banner small { display: block; color: var(--muted); }
+.update-get { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); text-decoration: none; }

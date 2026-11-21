@@ -1,0 +1,17 @@
+{
+  "name": "mediguard-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MediGuard Android app (Capacitor wrapper around ../web)",
+  "scripts": {
+    "build:www": "node scripts/build-www.js",
+    "sync": "npm run build:www && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.2.0",
+    "@capacitor/cli": "6.2.0",
+    "@capacitor/core": "6.2.0",
+    "tesseract.js-core": "5.1.1",
+    "@tesseract.js-data/eng": "1.0.0"
+  }
+}

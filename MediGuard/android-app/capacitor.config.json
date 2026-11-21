@@ -1,0 +1,9 @@
+{
+  "appId": "in.mediguard.app",
+  "appName": "MediGuard",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true
+  }
+}
