@@ -211,8 +211,17 @@
     const mfg = t.match(new RegExp("(?:MFG|MFD|MANUFACTURED\\s+ON|MANUFACTURING\\s+DATE|DOM)\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE));
     if (mfg) out.mfg = dateFromMatch(mfg);
 
-    const exp = t.match(new RegExp("(?:EXP(?:IRY)?|USE\\s+BEFORE|BEST\\s+BEFORE)\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE));
+    const exp = t.match(new RegExp("(?:EXP(?:IRY)?|\\bE[KP]P?(?=[.:\\s])|USE\\s+BEFORE|BEST\\s+BEFORE)\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE));
     if (exp) out.exp = dateFromMatch(exp);
+    // No "Exp" label read (smudged or sideways stamp)? The expiry is the latest date printed on a pack.
+    if (!out.exp) {
+      const all = [...t.matchAll(new RegExp(DATE_RE, "g"))].map(dateFromMatch)
+        .filter((d) => d && d.y >= 2000 && d.y <= 2045 && (!out.mfg || monthIndex(d) > monthIndex(out.mfg)));
+      if (all.length) {
+        out.exp = all.reduce((a, b) => (monthIndex(b) > monthIndex(a) ? b : a));
+        out.expGuessed = true;
+      }
+    }
 
     const maker = String(text || "").split(/\n/).find((line) => /(MANUFACTURED|MFD\.?|MFG\.?|MARKETED|MKTD\.?)\s*(BY|FOR)/i.test(line));
     if (maker) out.manufacturerLine = maker.trim();
@@ -255,6 +264,7 @@
     return {
       text,
       brandText: manual.brand ? String(manual.brand) : "",
+      price: parseFloat(manual.price) || 0,
       codes,
       printed,
       checklist: obs.checklist || {},
@@ -306,6 +316,19 @@
         }
       }
     });
+    return best;
+  }
+
+  // Unbranded packs ("Calcium And Vitamin D3 Tablets IP") name the salts, not a brand:
+  // find the medicine whose salts are ALL printed (most salts wins, generic version preferred)
+  function identifyByComposition(text) {
+    const t = upper(text);
+    let best = null;
+    for (const med of DATA.MEDICINES) {
+      if (!med.salts.every(([s]) => new RegExp(DATA.SALTS[s] || upper(s)).test(t))) continue;
+      const score = med.salts.length * 2 + (med.generic ? 1 : 0);
+      if (!best || score > best.score) best = { med, kind: "composition", score, seen: compositionText(med) };
+    }
     return best;
   }
 
@@ -361,6 +384,7 @@
       const fromQR = findMedicineByName(qrBrand.brand) || (identify(qrBrand.brand) || {}).med;
       if (fromQR) id = { med: fromQR, kind: "exact", seen: qrBrand.brand };
     }
+    if (!id && facts.text.length > 40) id = identifyByComposition(facts.text);
     const med = id ? id.med : null;
 
     if (!id) {
@@ -370,6 +394,10 @@
       add("danger", 35, `Name looks like a copy of "${med.brand}"`,
         `The pack reads "${id.seen}", which is ${id.distance} letter(s) away from the real brand "${med.brand}". ` +
         "Fakers often change one letter. Check the spelling on the pack with your own eyes (the camera can misread too).");
+    } else if (id.kind === "composition") {
+      add("pass", 0, "Recognised by composition",
+        `No brand name, but the pack lists ${compositionText(med)}. Same as: ` +
+        alternativesFor(med).filter((a) => !a.generic).map((a) => a.brand).join(", ") + ".");
     } else if (id.kind === "partial") {
       add("info", 5, `Probably ${med.brand}`,
         "The brand name was found but not its strength / full name. Please pick the exact brand from the list to be sure.");
@@ -379,9 +407,15 @@
 
     // ---------- Rule 2: does the strength / composition on the pack match the brand? ----------
     if (med && id.kind !== "lookalike" && facts.text.length > 40) {
-      const found = printed.strengths;
+      // "equivalent to elemental calcium 500 mg" is an explanation, not a different strength
+      const elemental = [...upper(facts.text).matchAll(/ELEMENT\w*\s+\w+\s+(\d+(?:\.\d+)?)\s*MG/g)].map((m) => parseFloat(m[1]));
+      const found = printed.strengths.filter((s) => !(s.unit === "MG" && elemental.includes(s.value)));
       const missing = med.salts.filter(([, n, u]) => !found.some((s) => s.value === n && s.unit === upper(u)));
-      if (found.length && missing.length) {
+      // a strength is "wrong" only if the pack shows one that belongs to none of the salts
+      const odd = found.filter((s) => !med.salts.some(([, n, u]) => s.value === n && s.unit === upper(u)));
+      if (missing.length && !odd.length) {
+        if (found.length) add("pass", 0, "Strength matches (partly readable)", compositionText(med));
+      } else if (found.length && missing.length) {
         add("danger", 30, "Strength doesn't match the brand",
           `${med.brand} should contain ${compositionText(med)}, but the pack shows ` +
           found.map((s) => `${s.value} ${s.unit.toLowerCase()}`).join(", ") + ".");
@@ -435,7 +469,8 @@
       const left = monthIndex(exp) - now;
       if (left < 0) add("danger", 50, "EXPIRED", `It expired in ${showDate(exp)}. Do not take it.`);
       else if (left < SOON_MONTHS) add("info", 0, "Expires soon", `Expiry ${showDate(exp)} - use before then.`);
-      else add("pass", 0, "Not expired", `Expiry ${showDate(exp)}.`);
+      else add("pass", 0, "Not expired", `Expiry ${showDate(exp)}.` +
+        (printed.expGuessed ? " (The latest date stamped on the pack - check it is the Exp. date.)" : ""));
     } else {
       add("warn", 10, "No expiry date found", "Every genuine medicine prints an expiry date. Type it in if the camera missed it.");
     }
@@ -492,6 +527,16 @@
         med && !med.generic ? "Popular brands in India carry a QR code - scan it for extra checks." : "Scan one if the pack has it.");
     }
 
+    // ---------- Rule 6b: government free-supply medicine ----------
+    const govt = upper(facts.text).match(/(\w+)\s+GOVERNMENT\s+SUPPLY|GOVT\.?\s+SUPPLY|GOVERNMENT\s+SUPPLY|NOT\s+FOR\s+SALE|FREE\s+SUPPLY|NOT\s+TO\s+BE\s+SOLD/);
+    if (govt) {
+      const paid = facts.price > 0;
+      add(paid ? "warn" : "info", paid ? 25 : 0, "Government supply - not for sale",
+        "This strip is marked for free distribution by a government hospital / health centre. " +
+        (paid ? "You paid for it, so a shop may have sold diverted government stock - report it to the Drug Controller."
+              : "If you bought it in a shop, that is illegal diversion - report it. If a government hospital gave it to you free, that is normal."));
+    }
+
     // ---------- Rule 7: prescription warning ----------
     if (med && med.rx && facts.text.length > 120 && !/\bRX\b|SCHEDULE\s*H|PRESCRIPTION|REGISTERED MEDICAL PRACTITIONER/.test(upper(facts.text))) {
       add("info", 5, "Prescription warning not found",
@@ -514,6 +559,8 @@
     expired:    { label: "EXPIRED - do not use",    tone: "danger", say: "This medicine is expired. Do not take it." },
     suspicious: { label: "SUSPICIOUS - verify",     tone: "warn",   say: "Some things don't look right. Check with the pharmacist before taking it." },
     ok:         { label: "No red flags found",      tone: "ok",     say: "No warning signs were found. Keep the bill and buy from licensed pharmacies." },
+    details:    { label: "Almost done - add the missing details", tone: "info",
+                  say: "No warning signs so far. Type the batch no. / expiry printed on the strip in step 2 and press Check again." },
     unknown:    { label: "Not enough information",  tone: "info",   say: "Scan the barcode / QR and take a clear photo of the printed side, or type the details." },
   };
 
@@ -528,7 +575,8 @@
     if (otherDanger >= HIGH_RISK || (risk >= HIGH_RISK && !expired)) key = "fake";
     else if (expired) key = "expired";
     else if (risk >= SUSPICIOUS || ev.some((e) => e.weight >= 20)) key = "suspicious";  // one strong warning is enough
-    else if (reasoning.medicine && passes >= 2) key = "ok";
+    else if (reasoning.medicine && passes >= 2 && !ev.some((e) => /^No (batch|expiry)/.test(e.title))) key = "ok";
+    else if (reasoning.medicine && risk < SUSPICIOUS) key = "details";   // looks fine so far, but batch / expiry unread
     else if (risk > 0 && reasoning.medicine) key = "suspicious";
     else key = "unknown";
     return Object.assign({ key, risk, passes }, VERDICTS[key]);
@@ -553,6 +601,10 @@
       "Compare it with a pack you know is genuine (colour, font, logo, foil).",
       "If the pharmacist also doubts it, report it:",
       ...report,
+    ];
+    if (verdict.key === "details") return [
+      "Find the B.No. (batch number) and Exp. date stamped on the strip - often in small dark ink, sometimes sideways.",
+      "Type them in step 2 and press Check this medicine again.",
     ];
     if (verdict.key === "ok") return [
       "No warning signs found. This app can't do a lab test, so stay alert to how the medicine looks and works.",

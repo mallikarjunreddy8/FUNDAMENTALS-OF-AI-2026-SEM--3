@@ -103,15 +103,54 @@
 
   // ---------------------------------------------------------------- photo: barcode + OCR
   // Shrink big phone photos and boost contrast so the text is easier to read
-  async function prepareImage(file) {
+  function loadImage(file) {
     const url = URL.createObjectURL(file);
-    try {
-      const img = await new Promise((resolve, reject) => {
-        const i = new Image();
-        i.onload = () => resolve(i);
-        i.onerror = () => reject(new Error("Couldn't open that image"));
-        i.src = url;
-      });
+    return new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => { URL.revokeObjectURL(url); resolve(i); };
+      i.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't open that image")); };
+      i.src = url;
+    });
+  }
+
+  /*
+   * Batch no. and dates are often STAMPED in dark ink (black / blue / violet) on shiny foil,
+   * sometimes sideways. This keeps only the stamp ink (drops red / green print and the foil)
+   * and turns the picture, so the text reader can read it.
+   *   mode "blue": dark and bluish ink    mode "dark": very dark ink of any colour except red
+   */
+  function inkCanvas(img, mode, angle) {
+    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    const src = document.createElement("canvas");
+    src.width = w; src.height = h;
+    const sctx = src.getContext("2d");
+    sctx.drawImage(img, 0, 0, w, h);
+    const px = sctx.getImageData(0, 0, w, h);
+    const d = px.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2], lum = (r + g + b) / 3;
+      const ink = mode === "blue" ? lum < 100 && b - r > 5 : lum < 60 && Math.abs(r - b) < 12;
+      d[i] = d[i + 1] = d[i + 2] = ink ? 0 : 255;
+    }
+    sctx.putImageData(px, 0, 0);
+    const out = document.createElement("canvas");
+    const turn = angle % 180 !== 0;
+    out.width = turn ? h : w; out.height = turn ? w : h;
+    const octx = out.getContext("2d");
+    octx.fillStyle = "#fff";
+    octx.fillRect(0, 0, out.width, out.height);
+    octx.translate(out.width / 2, out.height / 2);
+    octx.rotate((angle * Math.PI) / 180);
+    octx.drawImage(src, -w / 2, -h / 2);
+    return out;
+  }
+
+  // only keep lines that look like batch / date lines from the extra passes (the rest is foil noise)
+  const STAMP_LINE = /\b(B\.?\s?NO|BATCH|LOT|E[XK]?P|MFG|MFD|MFO|USE\s+BEFORE)\b|\d{1,2}\s*[\/.\-]\s*(\d{4}|\d{2})\b/i;
+
+  async function prepareImage(img) {
+    {
       const scale = Math.min(1, 1800 / Math.max(img.width, img.height));
       const c = document.createElement("canvas");
       c.width = Math.round(img.width * scale);
@@ -131,8 +170,6 @@
       for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = ((d[i] - lo) * 255) / span;
       ctx.putImageData(px, 0, 0);
       return c;
-    } finally {
-      URL.revokeObjectURL(url);
     }
   }
 
@@ -159,17 +196,31 @@
     } else {
       try {
         setStatus("Reading the text on the pack… (first time downloads the reader, ~5 MB)", true);
-        const canvas = await prepareImage(file);
+        const img = await loadImage(file);
+        let pass = "Reading the text";
         const worker = await Tesseract.createWorker("eng", 1, {
           workerPath: "lib/worker.min.js",
           ...(window.MEDIGUARD_OCR || {}),   // optional: local OCR engine + language files (no CDN)
           logger: (m) => {
-            if (m.status === "recognizing text") setStatus(`Reading the text… ${Math.round(m.progress * 100)}%`, true);
+            if (m.status === "recognizing text") setStatus(`${pass}… ${Math.round(m.progress * 100)}%`, true);
           },
         });
-        const { data } = await worker.recognize(canvas);
+        const { data } = await worker.recognize(await prepareImage(img));
+        let text = (data.text || "").trim();
+        // batch / expiry missing? read the stamp ink on its own, also turned sideways
+        const missing = () => {
+          const p = MediAgent.readPrintedText(text);
+          return !p.batch || !p.exp;
+        };
+        const passes = [["blue", 270], ["blue", 90], ["blue", 0], ["dark", 270], ["dark", 90], ["dark", 0]];
+        for (let k = 0; k < passes.length && missing(); k++) {
+          pass = `Looking for a stamped batch / expiry (${k + 1}/${passes.length})`;
+          const res = await worker.recognize(inkCanvas(img, ...passes[k]));
+          const lines = (res.data.text || "").split("\n").filter((l) => STAMP_LINE.test(l));
+          if (lines.length) text += "\n" + lines.join("\n");
+        }
         await worker.terminate();
-        $("ocrText").value = (data.text || "").trim();
+        $("ocrText").value = text;
         setStatus($("ocrText").value ? "Done. Check the details below, then press Check." :
           "Couldn't read any text. Try a sharper photo in better light, or type the details.");
       } catch (err) {

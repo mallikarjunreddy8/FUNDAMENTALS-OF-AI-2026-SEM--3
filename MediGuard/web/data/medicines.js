@@ -184,7 +184,7 @@
     // ---------- Calcium carbonate 1250 mg + Vitamin D3 250 IU ----------
     { brand: "Shelcal 500", match: { name: "SHELCAL", number: "500" }, company: "Torrent Pharmaceuticals", companyKeys: ["TORRENT"],
       form: "Tablet", rx: false, use: "Calcium / vitamin D supplement", salts: [["Calcium carbonate", 1250, "mg"], ["Vitamin D3", 250, "IU"]] },
-    { brand: "Calcium 500 mg + Vitamin D3 250 IU", generic: true, company: GENERIC_SOURCE, companyKeys: [],
+    { brand: "Calcium and Vitamin D3 Tablets (Calcium carbonate 1250 mg + Vitamin D3 250 IU)", generic: true, company: GENERIC_SOURCE, companyKeys: [],
       form: "Tablet", rx: false, use: "Calcium / vitamin D supplement", salts: [["Calcium carbonate", 1250, "mg"], ["Vitamin D3", 250, "IU"]] },
   ];
 
@@ -211,8 +211,8 @@
     "Mefenamic acid": "MEFENAMIC",
     "Dicyclomine": "DICYCLOMINE|DICYCLOVERINE",
     "Fexofenadine": "FEXOFENADINE",
-    "Calcium carbonate": "CALCIUM",
-    "Vitamin D3": "VITAMIN\\s*D3|CHOLECALCIFEROL",
+    "Calcium carbonate": "CALC[IL]UM|CALCIU",
+    "Vitamin D3": "VITAMIN\\s*D[3SYZ:]?\\b|CHOLECALCIFEROL",
   };
 
   // Reported batches. THESE ARE SAMPLE ENTRIES for the demo.
@@ -232,6 +232,7 @@
     { id: "tooCheap",     weight: 15, label: "Price is far lower than usual / unusual big discount" },
     { id: "noBill",       weight: 15, label: "Bought without a bill, or from an unlicensed / unknown seller" },
     { id: "noEffect",     weight: 15, label: "It didn't work as before, or caused an unusual reaction" },
+    { id: "govtSupply",   weight: 25, label: "Strip says \"Government supply - Not for sale\" but you bought it in a shop" },
   ];
 
   const data = { MEDICINES, SALTS, BATCH_ALERTS, CHECKLIST };

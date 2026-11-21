@@ -99,4 +99,24 @@ test("search by salt finds brands and alternatives", () => {
   assert.ok(res.every((r) => r.composition.startsWith("Pantoprazole")));
 });
 
+console.log("Real strip photo (user test, no QR, sideways stamp, foil)");
+const REAL = require("fs").readFileSync(__dirname + "/real_strip_ocr.txt", "utf8");
+test("unbranded calcium + D3 strip is recognised by composition", () => {
+  const r = A.check({ today: "2026-11-21", text: REAL });
+  assert.strictEqual(r.match, "composition");
+  assert.ok(/Calcium/.test(r.medicine.brand));
+  assert.strictEqual(r.extracted.exp, "09/2027");          // from the sideways stamp "DP.09/2027"
+  assert.strictEqual(r.verdict.key, "details", titles(r)); // asks for the batch no.
+  assert.ok(!/Strength doesn't match/.test(titles(r)));   // "elemental calcium 500 mg" is not a wrong strength
+});
+test("same strip with the batch typed in -> no red flags", () => {
+  const r = A.check({ today: "2026-11-21", text: REAL, manual: { batch: "CCV-A102" } });
+  assert.strictEqual(r.verdict.key, "ok", titles(r));
+});
+test("government-supply strip bought in a shop is suspicious", () => {
+  const r = A.check({ today: "2026-11-21", text: REAL + "\nTelangana Government Supply\nNot for Sale",
+                      manual: { batch: "CCV-A102", price: "40" } });
+  assert.strictEqual(r.verdict.key, "suspicious", titles(r));
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ", some FAILED" : ""}`);

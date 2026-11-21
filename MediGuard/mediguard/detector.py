@@ -49,6 +49,7 @@ CHECKLIST = {
     "tooCheap": (15, "Price is far lower than usual / unusual big discount"),
     "noBill": (15, "Bought without a bill, or from an unlicensed / unknown seller"),
     "noEffect": (15, "It didn't work as before, or caused an unusual reaction"),
+    "govtSupply": (25, 'Strip says "Government supply - Not for sale" but you bought it in a shop'),
 }
 
 VERDICTS = {
@@ -56,6 +57,8 @@ VERDICTS = {
     "expired": ("EXPIRED - do not use", "danger", "This medicine is expired. Do not take it."),
     "suspicious": ("SUSPICIOUS - verify", "warn", "Some things don't look right. Check with the pharmacist before taking it."),
     "ok": ("No red flags found", "ok", "No warning signs were found. Keep the bill and buy from licensed pharmacies."),
+    "details": ("Almost done - add the missing details", "info",
+                "No warning signs so far. Type the batch no. / expiry printed on the strip and check again."),
     "unknown": ("Not enough information", "info",
                 "Scan the barcode / QR and take a clear photo of the printed side, or type the details."),
 }
@@ -222,9 +225,14 @@ def read_printed(text):
     m = re.search(r"(?:MFG|MFD|MANUFACTURED\s+ON|MANUFACTURING\s+DATE|DOM)\.?\s*(?:DATE|DT)?\.?\s*[:.\-]?\s*" + DATE_RE, t)
     if m:
         out["mfg"] = _date_from(m)
-    m = re.search(r"(?:EXP(?:IRY)?|USE\s+BEFORE|BEST\s+BEFORE)\.?\s*(?:DATE|DT)?\.?\s*[:.\-]?\s*" + DATE_RE, t)
+    m = re.search(r"(?:EXP(?:IRY)?|\bE[KP]P?(?=[.:\s])|USE\s+BEFORE|BEST\s+BEFORE)\.?\s*(?:DATE|DT)?\.?\s*[:.\-]?\s*" + DATE_RE, t)
     if m:
         out["exp"] = _date_from(m)
+    if not out["exp"]:   # smudged / sideways stamp: the expiry is the latest date printed on a pack
+        dates = [d for d in (_date_from(x) for x in re.finditer(DATE_RE, t)) if d and 2000 <= d[0] <= 2045
+                 and (not out["mfg"] or months(d) > months(out["mfg"]))]
+        if dates:
+            out["exp"], out["exp_guessed"] = max(dates, key=months), True
     for line in text.splitlines():
         if re.search(r"(MANUFACTURED|MFD\.?|MFG\.?|MARKETED|MKTD\.?)\s*(BY|FOR)", line, re.I):
             out["maker"] = line.strip()
@@ -383,6 +391,10 @@ class Detector:
             found = printed["strengths"]
             missing = [w for w in want if w not in found]
             # a strength that is printed but belongs to none of the salts (an unreadable number is not evidence)
+            # "equivalent to elemental calcium 500 mg" explains a strength, it is not a different one
+            elemental = [float(x) for x in re.findall(r"ELEMENT\w*\s+\w+\s+(\d+(?:\.\d+)?)\s*MG", pack.text.upper())]
+            found = [f for f in found if not (f[1] == "MG" and f[0] in elemental)]
+            missing = [w for w in want if w not in found]
             odd = [(fv, fu) for fv, fu in found if (fv, fu) not in want]
             near = lambda f: any(u == f[1] and Levenshtein.distance(f"{v:g}", f"{f[0]:g}") <= 1 for v, u in want)  # noqa: E731
             if want and missing and odd and all(near(f) for f in odd) and not pack.brand:
@@ -497,6 +509,14 @@ class Detector:
         if not codes:
             add("info", 0, "No barcode / QR scanned", "Scan it if the pack has one, for extra checks.")
 
+        # ---------- rule 8b: government free-supply medicine ----------
+        if re.search(r"GOVERNMENT\s+SUPPLY|GOVT\.?\s+SUPPLY|NOT\s+FOR\s+SALE|FREE\s+SUPPLY|NOT\s+TO\s+BE\s+SOLD", pack.text.upper()):
+            paid = bool(pack.price)
+            add("warn" if paid else "info", 25 if paid else 0, "Government supply - not for sale",
+                "Marked for free distribution by a government hospital / health centre. "
+                + ("You paid for it: a shop may have sold diverted government stock - report it."
+                   if paid else "If you bought it in a shop, that is illegal diversion - report it."))
+
         # ---------- rule 9: what the user noticed ----------
         for k, (w, label) in CHECKLIST.items():
             if pack.checklist.get(k):
@@ -518,8 +538,10 @@ class Detector:
             key = "expired"
         elif risk >= SUSPICIOUS or any(e["weight"] >= 20 for e in ev):
             key = "suspicious"   # a strong warning on its own is enough to ask for a second look
-        elif med is not None and passes >= 2:
+        elif med is not None and passes >= 2 and not any(e["title"].startswith(("No batch", "No expiry")) for e in ev):
             key = "ok"
+        elif med is not None and risk < SUSPICIOUS:
+            key = "details"   # nothing wrong so far, but batch / expiry unread
         elif risk > 0 and med is not None:
             key = "suspicious"
         else:
@@ -573,6 +595,8 @@ def actions(key):
                        "Compare it with a pack you know is genuine.", "If it is still doubtful, report it:", *report],
         "ok": ["No warning signs found. This is not a lab test - stay alert to how the medicine looks and works.",
                "Keep the bill. Buy only from licensed pharmacies."],
+        "details": ["Find the B.No. and Exp. stamped on the strip (small dark ink, sometimes sideways).",
+                    "Type them in and check again."],
         "unknown": ["Scan the barcode / QR code.", "Photograph the side with B.No., Mfg and Exp in good light.",
                     "Or type the brand, batch and expiry."],
     }[key]
