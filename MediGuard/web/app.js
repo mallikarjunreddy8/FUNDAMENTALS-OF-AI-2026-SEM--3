@@ -13,6 +13,9 @@
     live: null,      // Html5Qrcode instance while the camera is on
     lastReport: null,
     aiNotes: [],     // problems the AI reader saw on the pack (blurry print, misspellings...)
+    photos: [],      // the photos of the last scan (for zooming on the stamp)
+    stampBoxes: [],  // where the reader thinks the stamp is, per photo
+    zoom: null,      // { img, rect, index } while the zoom screen is open
     readBy: "",      // "Claude vision" or "OCR"
   };
 
@@ -168,8 +171,100 @@ Reply with only this JSON object:
 
   // ---------------------------------------------------------------- photos: see ocr.js for the text reader
 
+  // ---------------------------------------------------------------- zoom on the stamp
+  // The user frames the batch / dates; only that part is read (several ways, then a vote)
+  async function openZoom(index) {
+    if (!state.photos.length) {
+      showView("home");
+      return setStatus("Scan or upload a photo first.");
+    }
+    index = index || 0;
+    showView("zoom");
+    $("zoomStatus").textContent = "Opening the photo…";
+    const img = await MediOCR.loadImage(state.photos[index]);
+    const guess = state.stampBoxes[index];
+    const pad = (b) => ({ x: b.x - b.w * 0.15, y: b.y - b.h * 0.15, w: b.w * 1.3, h: b.h * 1.3 });
+    state.zoom = { img, index, rect: guess ? pad(guess) : { x: img.width * 0.2, y: img.height * 0.6, w: img.width * 0.6, h: img.height * 0.15 } };
+    $("zoomPhotos").replaceChildren(...(state.photos.length > 1 ? state.photos.map((f, i) =>
+      el("button", { class: "chip-btn" + (i === index ? " active" : ""), onclick: () => openZoom(i) }, `Photo ${i + 1}`)) : []));
+    $("zoomStatus").textContent = guess ? "The box shows where the stamp seems to be - move it if needed." : "Drag a box around the batch no. and dates.";
+    drawZoom();
+  }
+
+  function drawZoom() {
+    const z = state.zoom, c = $("zoomCanvas");
+    if (!z) return;
+    const cssW = c.parentElement.clientWidth || 360;
+    const scale = cssW / z.img.width, dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(cssW * dpr);
+    c.height = Math.round(z.img.height * scale * dpr);
+    const ctx = c.getContext("2d");
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    ctx.drawImage(z.img, 0, 0);
+    const r = z.rect;
+    ctx.fillStyle = "rgba(0,0,0,0.45)";            // dim everything outside the box
+    ctx.fillRect(0, 0, z.img.width, r.y);
+    ctx.fillRect(0, r.y + r.h, z.img.width, z.img.height - r.y - r.h);
+    ctx.fillRect(0, r.y, r.x, r.h);
+    ctx.fillRect(r.x + r.w, r.y, z.img.width - r.x - r.w, r.h);
+    ctx.strokeStyle = "#2bb3a3";
+    ctx.lineWidth = 3 / scale;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    z.scale = scale;
+  }
+
+  function zoomPointer() {
+    const c = $("zoomCanvas");
+    let start = null;
+    const pos = (e) => {
+      const b = c.getBoundingClientRect(), z = state.zoom;
+      return { x: Math.max(0, Math.min(z.img.width, (e.clientX - b.left) / z.scale)),
+               y: Math.max(0, Math.min(z.img.height, (e.clientY - b.top) / z.scale)) };
+    };
+    c.addEventListener("pointerdown", (e) => { if (!state.zoom) return; start = pos(e); c.setPointerCapture(e.pointerId); });
+    c.addEventListener("pointermove", (e) => {
+      if (!start) return;
+      const p = pos(e);
+      state.zoom.rect = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) };
+      drawZoom();
+    });
+    c.addEventListener("pointerup", () => { start = null; });
+    window.addEventListener("resize", drawZoom);
+  }
+
+  async function readZoom() {
+    const z = state.zoom;
+    if (!z) return;
+    if (z.rect.w < 20 || z.rect.h < 10) return ($("zoomStatus").textContent = "Drag a bigger box around the batch no. and dates.");
+    $("btnZoomRead").disabled = true;
+    const st = $("zoomStatus");
+    st.classList.add("busy");
+    try {
+      const out = await MediOCR.readRegion(z.img, z.rect, (msg, f) => { st.textContent = f ? `${msg}… ${Math.round(f * 100)}%` : msg; });
+      const p = MediAgent.readPrintedText(out.text);
+      const month = (d) => (d ? `${d.y}-${String(d.m).padStart(2, "0")}` : "");
+      if (p.batch) $("fBatch").value = p.batch;
+      if (p.mfg) $("fMfg").value = month(p.mfg);
+      if (p.exp) $("fExp").value = month(p.exp);
+      $("ocrText").value = ($("ocrText").value + "\n" + out.text).trim();
+      st.classList.remove("busy");
+      if (!p.batch && !p.mfg && !p.exp) {
+        st.textContent = "Couldn't read it. Try a tighter box, or type the details (Check tab).";
+      } else {
+        state.readBy = state.readBy || "on-device reader";
+        runCheck();
+      }
+    } catch (err) {
+      st.classList.remove("busy");
+      st.textContent = "Couldn't read it (" + (err.message || err) + ").";
+    } finally {
+      $("btnZoomRead").disabled = false;
+    }
+  }
+
   // ---------------------------------------------------------------- screens
-  const TITLES = { home: "MediGuard", scan: "Scanning…", manual: "Check manually", result: "Result", find: "Same composition" };
+  const TITLES = { home: "MediGuard", scan: "Scanning…", manual: "Check manually", result: "Result", find: "Same composition",
+    zoom: "Zoom on the stamp" };
   function showView(name) {
     document.querySelectorAll(".view").forEach((v) => { v.hidden = v.id !== "view-" + name; });
     $("viewTitle").textContent = TITLES[name] || "MediGuard";
@@ -177,6 +272,7 @@ Reply with only this JSON object:
     document.querySelectorAll(".tab[data-go]").forEach((t) => t.classList.toggle("active", t.dataset.go === name));
     window.scrollTo(0, 0);
     if (name === "find") setTimeout(() => $("search").focus(), 50);
+    document.querySelectorAll("#view-manual .btn-zoom").forEach((b) => { b.hidden = !state.photos.length; });
   }
 
   // One or more photos (e.g. front and back of a strip) are read and their text combined
@@ -190,6 +286,8 @@ Reply with only this JSON object:
     state.today = null;
     $("btnCheck").disabled = true;
     const texts = [];
+    state.photos = files;
+    state.stampBoxes = [];
     const sample = await aiReaderPromise;   // Claude vision: only on claude.ai, never needed
 
     for (let i = 0; i < files.length; i++) {
@@ -218,6 +316,7 @@ Reply with only this JSON object:
         try {
           const res = await MediOCR.read(file, (msg, f) => setStatus((f ? `${msg}… ${Math.round(f * 100)}%` : msg) + of, true));
           text = res.text;
+          state.stampBoxes[i] = res.stampBox;
           state.readBy = state.readBy || "on-device reader";
         } catch (err) {
           setStatus("Couldn't read the text (" + (err.message || err) + ").");
@@ -406,6 +505,9 @@ Reply with only this JSON object:
 
     document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => showView(b.dataset.go)));
     $("btnBack").addEventListener("click", () => showView("home"));
+    document.querySelectorAll(".btn-zoom").forEach((b) => b.addEventListener("click", () => openZoom(0)));
+    $("btnZoomRead").addEventListener("click", readZoom);
+    zoomPointer();
     $("quickPicks").replaceChildren(...["Dolo 650", "Pan 40", "Azee 500", "Telma 40", "Paracetamol", "Calcium"].map((n) =>
       el("button", { class: "chip-btn", onclick: () => { $("search").value = n; runSearch(); } }, n)));
     // live barcode scanning needs a camera page of its own (https / localhost, not inside claude.ai)

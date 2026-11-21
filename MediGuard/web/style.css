@@ -244,3 +244,8 @@ summary small { color: var(--muted); font-weight: 400; }
 .read-box dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .read-box dd.missing { color: var(--warn); font-weight: 600; }
 .read-fix { background: var(--card); }
+
+/* ---------- zoom on the stamp ---------- */
+.zoom-wrap { border-radius: 12px; overflow: hidden; background: #000; margin: 8px 0; }
+#zoomCanvas { display: block; width: 100%; height: auto; touch-action: none; cursor: crosshair; }
+#view-manual .btn-zoom { width: 100%; margin-bottom: 10px; }

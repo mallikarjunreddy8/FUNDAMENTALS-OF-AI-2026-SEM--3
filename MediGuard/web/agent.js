@@ -211,7 +211,19 @@
       if (digitsN < 2 || digitsN / alnum < 0.6) return tok;
       return tok.replace(/[OQD]/g, "0").replace(/[IL|]/g, "1").replace(/Z/g, "2").replace(/S/g, "5").replace(/B/g, "8");
     });
-    const tt = fixDigits(t);
+    // month names one letter off ("CCT.27" -> "OCT.27", "NGY 2025" -> "NOV 2025", "5EP" -> "SEP")
+    const MONTH_NAMES = Object.keys(MONTHS).filter((m) => m.length === 3);
+    const fixMonths = (str) => str.replace(/\b([A-Z0-9]{3})([.,\s\-\/']+)(\d{2,4})(?!\d)/g, (all, mon, sep, yr) => {
+      if (MONTHS[mon]) return all;
+      const m2 = mon.replace(/0/g, "O").replace(/5/g, "S").replace(/1/g, "I").replace(/8/g, "B");
+      const near = MONTH_NAMES.filter((n) => [...n].filter((ch, i) => ch !== m2[i]).length <= 1);
+      return near.length === 1 ? near[0] + sep + yr : all;
+    });
+    // licence numbers ("Mfg. Lic. No. MB/09/829", "M.L. No.") look like dates: leave those lines out
+    // ...and prices ("M.R.P. Rs. 104.42") too
+    const noLicence = t.split("\n").filter((l) => !/\bLIC\b|LIC\.|LICEN[CS]E|\bM\.?\s?L\.?\s?N[O0]/.test(l))
+      .map((l) => l.replace(/(M\.?\s?R\.?\s?P|\bRS\b|₹).*$/, "")).join("\n");
+    const tt = fixMonths(fixDigits(noLicence));
 
     // Batch: every "B.No. / Batch No. / Lot" reading; keep the most complete one
     const batches = [...t.matchAll(/(?:\bB\.?\s?N[O0]|\bBATCH\s*(?:N[O0]|NUMBER)?|\bLOT\s*(?:N[O0])?)\s*\.?\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-\/]{2,14})/g)]
@@ -224,9 +236,9 @@
       });
     }
 
-    const MFG_LABEL = "(?:MFG|MFD|M[EF][CG6D]{1,2}(?=[.:\\s])|MF(?=[.:\\s])|MANUFACTURED\\s+ON|MANUFACTURING\\s+DATE|DOM)";
+    const MFG_LABEL = "(?:MFG|MFD|M[EF][CG6D]{1,2}(?=[.,:\\s])|MF(?=[.,:\\s])|\\bI?HG(?=[.,:\\s])|MANUFACTURED\\s+ON|MANUFACTURING\\s+DATE|DOM)";
     const EXP_LABEL = "(?:EXP\\w*|E?X?[PR]IRY|EXPER\\s?Y|\\bE[KP]P?(?=[.:\\s])|USE\\s+BEFORE|BEST\\s+BEFORE)";
-    const after = (label) => [...tt.matchAll(new RegExp(label + "\\.?\\s*(?:DATE|DT)?\\.?\\s*[:.\\-]?\\s*" + DATE_RE, "g"))]
+    const after = (label) => [...tt.matchAll(new RegExp(label + "[\\s.,:;\\-]*(?:DATE\\w*|DT)?[\\s.,:;\\-]*" + DATE_RE, "g"))]
       .map(dateFromMatch).filter((d) => d && d.y >= 2000 && d.y <= 2045);
     const mfgs = after(MFG_LABEL), exps = after(EXP_LABEL);
     if (mfgs.length) out.mfg = mfgs[0];

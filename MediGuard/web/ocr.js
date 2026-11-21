@@ -79,7 +79,8 @@
    *   binary - black and white (local threshold) of `flat`
    *   stamp  - only blue / violet / black stamp ink
    */
-  function prepare(img) {
+  function prepare(img, opts) {
+    opts = opts || {};
     const base = scaled(img, MAX_SIDE);
     const w = base.width, h = base.height;
     const px = base.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
@@ -90,7 +91,8 @@
       lum[j] = (r + g + b) / 3;
       blueness[j] = b - Math.max(r, g * 0.9);
     }
-    const R = Math.max(12, Math.round(Math.max(w, h) / 50));
+    // background blur: wider than a letter. Whole photo: 1/50 of its size; a zoomed part has big letters
+    const R = opts.bgRadius ? Math.round(opts.bgRadius(w, h)) : Math.max(12, Math.round(Math.max(w, h) / 50));
     const bg = boxBlur(boxBlur(minc, w, h, R), w, h, R);
     const flatV = new Uint8ClampedArray(w * h);
     for (let j = 0; j < w * h; j++) flatV[j] = Math.min(255, (minc[j] / (bg[j] + 1)) * 225);
@@ -116,7 +118,7 @@
     flat.getContext("2d").putImageData(fd, 0, 0);
     binary.getContext("2d").putImageData(bd, 0, 0);
     stamp.getContext("2d").putImageData(sd, 0, 0);
-    return { flat, binary, stamp, boxes, w, h };
+    return { flat, binary, stamp, boxes, w, h, scale: w / img.width };
   }
 
   // Group stamp-ink pixels into cells, join neighbouring busy cells, return the biggest blocks
@@ -309,6 +311,7 @@
       const p = root.MediAgent ? root.MediAgent.readPrintedText(t) : {};
       return (p.batch ? 2 : 0) + (p.exp ? 2 : 0) + (p.mfg ? 1 : 0);
     };
+    let stampGuess = null, stampGuessScore = -1;
     for (const box of v.boxes) {
       if (!missing()) break;
       const dirsForBox = box.h > box.w * 1.2 ? [270, 90] : [0, 180];
@@ -325,6 +328,7 @@
         if (best && best.score >= 400) break;        // batch + expiry found: no need to try more
       }
       if (best && best.lines) text = mergeLines([text, best.lines]);
+      if (best && best.score > stampGuessScore) { stampGuessScore = best.score; stampGuess = box; }
     }
     // 4b. still missing: stamp ink of the whole photo in every direction
     const stampDirs = [...new Set([bestDir, 0, 90, 270, 180])];
@@ -335,8 +339,66 @@
       if (lines.length) text = mergeLines([text, lines.join("\n")]);
     }
     progress.pass = null;
-    return { text, angle: bestDir, passes: dirs.length + 1 };
+    // where the stamp probably is, in the photo's own pixels (to pre-draw the zoom box)
+    // prefer the block where batch / dates were actually read; else the biggest ink block
+    const b0 = stampGuessScore >= 100 ? stampGuess : (v.boxes.slice().sort((a, b) => b.y - a.y)[0] || null);
+    const stampBox = b0 ? { x: b0.x / v.scale, y: b0.y / v.scale, w: b0.w / v.scale, h: b0.h / v.scale } : null;
+    return { text, angle: bestDir, passes: dirs.length + 1, stampBox };
   }
 
-  root.MediOCR = { read, prepare, rotate, STAMP_LINE };
+  /*
+   * Read only the part of the photo the user framed (the batch / date stamp).
+   * rect is in the photo's own pixels. The part is cleaned, enlarged and read along its long
+   * side both ways, with three layouts; the reading with the most batch / date fields wins.
+   */
+  async function readRegion(img, rect, onProgress) {
+    const say = (msg, f) => onProgress && onProgress(msg, f);
+    const x = Math.max(0, Math.round(rect.x)), y = Math.max(0, Math.round(rect.y));
+    const w = Math.max(8, Math.min(img.width - x, Math.round(rect.w))), h = Math.max(8, Math.min(img.height - y, Math.round(rect.h)));
+    const part = canvasOf(w, h);
+    part.getContext("2d").drawImage(img, x, y, w, h, 0, 0, w, h);
+    const v = prepare(part, { bgRadius: (pw, ph) => Math.max(30, Math.min(pw, ph) * 0.6) });   // enlarged up to 3x
+    const workers = await getWorkers(Object.assign((m, f) => say(m, f), {}));
+    const fields = (t) => {
+      const p = root.MediAgent ? root.MediAgent.readPrintedText(t) : {};
+      return (p.batch ? 2 : 0) + (p.exp ? 2 : 0) + (p.mfg ? 1 : 0);
+    };
+    // Read the part several ways; parse batch / Mfg / Exp from EACH reading and vote.
+    // Each reading of a dotted stamp is a little wrong in a different place; the value that
+    // comes up most often is usually the right one.
+    const tall = h > w * 1.2;
+    const turns = tall ? [270, 90] : [0, 180];
+    const agent = root.MediAgent;
+    const show = (dt) => (dt ? String(dt.m).padStart(2, "0") + "/" + dt.y : null);
+    const votes = { batch: {}, mfg: {}, exp: {} };
+    const texts = [];
+    let n = 0, total = turns.length * 4;
+    const variants = [[v.flat, 6], [otsu(v.flat), 6], [v.flat, 11], [v.binary, 6]];
+    for (const d of turns) {
+      let found = 0;
+      for (const [src, psm] of variants) {
+        say("Reading the part you framed", (++n) / total);
+        const r = await recognize(workers.text, rotate(src, d), psm);
+        texts.push(r.text);
+        const p = agent ? agent.readPrintedText(r.text) : {};
+        const add = (k, val) => { if (val) { votes[k][val] = (votes[k][val] || 0) + 1; found++; } };
+        add("batch", p.batch ? p.batch.replace(/[^A-Z0-9]/g, "") : null);
+        add("mfg", show(p.mfg));
+        add("exp", show(p.exp));
+      }
+      if (found >= 6) break;                // this direction is the readable one
+    }
+    const top = (k) => Object.entries(votes[k]).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0];
+    const lines = [];
+    const b = top("batch"), m = top("mfg");
+    const ym = (x) => { const [mm, yy] = x.split("/").map(Number); return yy * 12 + mm; };
+    if (m) for (const k of Object.keys(votes.exp)) if (ym(k) <= ym(m[0])) delete votes.exp[k];   // expiry must come after Mfg
+    const e = top("exp");
+    if (b) lines.push("B.No. " + b[0]);
+    if (m) lines.push("MFG. " + m[0]);
+    if (e) lines.push("EXP. " + e[0]);
+    return { text: lines.join("\n"), raw: texts.join("\n"), votes };
+  }
+
+  root.MediOCR = { read, readRegion, prepare, rotate, loadImage, STAMP_LINE };
 })(typeof self !== "undefined" ? self : this);

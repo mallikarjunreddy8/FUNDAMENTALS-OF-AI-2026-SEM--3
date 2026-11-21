@@ -122,6 +122,7 @@
         <p class="hint">Tick anything that is true.</p>
         <div id="checklist" class="checklist"></div>
       </div>
+      <button class="btn ghost btn-zoom" hidden>Read batch / dates from my photo (zoom)</button>
       <button id="btnCheck" class="btn big">Check this medicine</button>
     </section>
 
@@ -135,7 +136,10 @@
         <div id="readBox" class="read-box" hidden>
           <div class="read-head"><strong>Read from your photo</strong><small>Compare with the strip - the camera can misread a digit</small></div>
           <dl id="readList"></dl>
-          <button class="btn small read-fix" data-go="manual">Correct these</button>
+          <div class="row-btns">
+            <button class="btn small read-fix btn-zoom">Zoom on batch / expiry</button>
+            <button class="btn small read-fix" data-go="manual">Correct these</button>
+          </div>
         </div>
         <div class="row-btns">
           <button id="btnSpeak" class="btn ghost small">Read aloud</button>
@@ -157,6 +161,17 @@
         <ol id="actions" class="actions"></ol>
       </div>
       <label for="photo" class="btn big">Scan another medicine</label>
+    </section>
+
+    <!-- ======================= ZOOM ON THE STAMP ======================= -->
+    <section id="view-zoom" class="view" hidden>
+      <div class="card">
+        <p class="hint">Drag a box around the <b>batch no. and dates</b> (they can be sideways). Then tap <b>Read this part</b>.</p>
+        <div class="zoom-wrap"><canvas id="zoomCanvas" aria-label="Your photo - drag to frame the stamp"></canvas></div>
+        <div id="zoomPhotos" class="chips-row"></div>
+        <div id="zoomStatus" class="status" role="status" aria-live="polite"></div>
+        <button id="btnZoomRead" class="btn big">Read this part</button>
+      </div>
     </section>
 
     <!-- ======================= FIND SAME COMPOSITION ======================= -->
