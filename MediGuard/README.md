@@ -36,6 +36,40 @@ Charts and CSV files are in `results/`. The full write-up with the literature re
 "Take a photo of the strip / box", or press a demo button. This online version uses the built-in list of 61 medicines
 and works without the PC. For the full 253,973-medicine check, run `server.py` (below).
 
+## Android app (APK) with automatic update roll-out
+
+Download the newest **`MediGuard-1.0.N.apk`** from the repository's
+[Releases page](https://github.com/mallikarjunreddy8/FUNDAMENTALS-OF-AI-2026-SEM--3/releases/latest) on your Android
+phone, open it and allow installing from this source.
+
+How updates roll out:
+
+1. Every push that changes `MediGuard/web/` or `MediGuard/android-app/` runs the GitHub workflow
+   `.github/workflows/mediguard-android.yml`. It runs the tests, builds the APK and publishes it as a new release
+   (`v1.0.<build number>`).
+2. When the app starts it asks GitHub for the latest release. If that is newer than the installed version, it shows
+   **"Update available"**. Tapping **Update** downloads the new APK, and Android installs it over the old one.
+
+Inside the app: photo scan, live barcode / QR scanning with the camera, offline text reading, manual check,
+same-composition finder.
+
+**Signing key (needed once for smooth updates).** Android only installs an update over the old app if both are
+signed with the same key. The key is never stored in git. Add two repository secrets (Settings → Secrets and
+variables → Actions → New repository secret):
+
+| Secret | Value |
+|---|---|
+| `MEDIGUARD_KEYSTORE_BASE64` | the keystore file, base64-encoded |
+| `MEDIGUARD_KEYSTORE_PASSWORD` | its password (key alias `mediguard`) |
+
+Make a key with:
+`keytool -genkeypair -keystore mediguard.keystore -alias mediguard -keyalg RSA -keysize 2048 -validity 10000`,
+then `base64 -w0 mediguard.keystore`. Until the secrets exist, builds use a temporary debug key, and moving to the
+real key needs one uninstall. Keep the keystore file safe: without it you cannot publish updates.
+
+Build it yourself: `cd android-app && npm install && APP_VERSION=1.0.0 node scripts/build-www.js && npx cap sync android`,
+then open `android-app/android` in Android Studio.
+
 ## Run it (Windows)
 
 Double-click **`run.bat`**. The first time it makes a `venv`, installs the packages and downloads the dataset
