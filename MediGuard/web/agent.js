@@ -568,7 +568,7 @@
     suspicious: { label: "SUSPICIOUS - verify",     tone: "warn",   say: "Some things don't look right. Check with the pharmacist before taking it." },
     ok:         { label: "No red flags found",      tone: "ok",     say: "No warning signs were found. Keep the bill and buy from licensed pharmacies." },
     details:    { label: "Almost done - add the missing details", tone: "info",
-                  say: "No warning signs so far. Type the batch no. / expiry printed on the strip in step 2 and press Check again." },
+                  say: "No warning signs so far. Tap 'Edit details', type the batch no. / expiry printed on the strip and check again." },
     unknown:    { label: "Not enough information",  tone: "info",   say: "Scan the barcode / QR and take a clear photo of the printed side, or type the details." },
   };
 
@@ -612,7 +612,7 @@
     ];
     if (verdict.key === "details") return [
       "Find the B.No. (batch number) and Exp. date stamped on the strip - often in small dark ink, sometimes sideways.",
-      "Type them in step 2 and press Check this medicine again.",
+      "Tap 'Edit details', type them and press Check this medicine.",
     ];
     if (verdict.key === "ok") return [
       "No warning signs found. This app can't do a lab test, so stay alert to how the medicine looks and works.",

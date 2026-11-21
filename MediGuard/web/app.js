@@ -73,7 +73,7 @@ Reply with only this JSON object:
     put("fExp", toMonthInput(r.exp));
     put("fMaker", r.manufacturer || r.marketed_by || "");
     state.readBy = "Claude vision";
-    const unsure = r.batch && String(r.batch).includes("?") ? " Part of the batch no. was unreadable - fix it in step 2." : "";
+    const unsure = r.batch && String(r.batch).includes("?") ? " Part of the batch no. was unreadable - tap 'Edit details' to fix it." : "";
     setStatus((r.photo_quality === "poor" ? "Read, but the photo is unclear - a sharper photo gives a better check. " :
       "Read by Claude. ") + "Check the details below." + unsure);
   }
@@ -237,9 +237,23 @@ Reply with only this JSON object:
     }
   }
 
+  // ---------------------------------------------------------------- screens
+  const TITLES = { home: "MediGuard", scan: "Scanning…", manual: "Check manually", result: "Result", find: "Same composition" };
+  function showView(name) {
+    document.querySelectorAll(".view").forEach((v) => { v.hidden = v.id !== "view-" + name; });
+    $("viewTitle").textContent = TITLES[name] || "MediGuard";
+    $("btnBack").hidden = name === "home";
+    document.querySelectorAll(".tab[data-go]").forEach((t) => t.classList.toggle("active", t.dataset.go === name));
+    window.scrollTo(0, 0);
+    if (name === "find") setTimeout(() => $("search").focus(), 50);
+  }
+
   async function scanPhoto(file) {
     if (!file) return;
     await stopLive();
+    resetForm();                 // every scan starts fresh
+    $("ocrText").value = "";
+    showView("scan");
     state.today = null;
     $("btnCheck").disabled = true;
 
@@ -272,7 +286,7 @@ Reply with only this JSON object:
     if (done) {
       // nothing more to read
     } else if (!window.Tesseract) {
-      setStatus("The text reader didn't load. Type the details in step 2.");
+      setStatus("The text reader did not load. Tap 'Type the details instead'.");
     } else {
       try {
         setStatus("Reading the text on the pack… (first time downloads the reader, ~5 MB)", true);
@@ -305,7 +319,7 @@ Reply with only this JSON object:
         setStatus($("ocrText").value ? "Done. Check the details below, then press Check." :
           "Couldn't read any text. Try a sharper photo in better light, or type the details.");
       } catch (err) {
-        setStatus("Couldn't read the text (" + (err.message || err) + "). You can type the details in step 2.");
+        setStatus("Couldn't read the text (" + (err.message || err) + "). Tap 'Type the details instead'.");
       }
     }
     $("btnCheck").disabled = false;
@@ -406,8 +420,7 @@ Reply with only this JSON object:
 
     $("actions").replaceChildren(...report.actions.map((a) => el("li", {}, a)));
 
-    $("result").hidden = false;
-    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    showView("result");
     $("result").focus({ preventScroll: true });
   }
 
@@ -433,14 +446,28 @@ Reply with only this JSON object:
   }
 
   // ---------------------------------------------------------------- search
+  // One card per composition: every brand with the same salts + strength, generic first
   function runSearch() {
-    const results = MediAgent.search($("search").value).filter((r) => !r.generic).slice(0, 6);
     const q = $("search").value.trim();
-    $("searchResults").replaceChildren(...(q.length >= 2 && !results.length
-      ? [el("p", { class: "hint" }, "Not in MediGuard's list yet.")]
-      : results.map((r) => el("div", { class: "search-item" },
-          el("b", {}, r.brand), el("small", {}, `${r.composition} · ${r.company}`),
-          el("ul", { class: "alts" }, r.alternatives.map(altItem))))));
+    const groups = new Map();
+    for (const r of MediAgent.search(q)) {
+      if (!groups.has(r.composition)) groups.set(r.composition, { match: r, items: new Map() });
+      const g = groups.get(r.composition);
+      for (const a of [r, ...r.alternatives]) if (!g.items.has(a.brand)) g.items.set(a.brand, a);
+    }
+    if (q.length < 2) return $("searchResults").replaceChildren();
+    if (!groups.size) {
+      return $("searchResults").replaceChildren(el("p", { class: "hint" },
+        `"${q}" is not in MediGuard's list yet. Try the salt name (for example paracetamol), or ask your pharmacist.`));
+    }
+    $("searchResults").replaceChildren(...[...groups.values()].slice(0, 5).map(({ match, items }) => {
+      const list = [...items.values()].sort((a, b) => (b.generic ? 1 : 0) - (a.generic ? 1 : 0));
+      return el("div", { class: "card find-card" },
+        el("b", {}, match.generic ? match.composition : match.brand),
+        el("div", { class: "comp" }, match.composition),
+        el("small", {}, `${list.length} option${list.length > 1 ? "s" : ""} with the same composition:`),
+        el("ul", { class: "alts" }, list.map(altItem)));
+    }));
   }
 
   // ---------------------------------------------------------------- demos
@@ -454,7 +481,8 @@ Reply with only this JSON object:
     $("ocrBox").open = true;
     document.querySelectorAll("#checklist input").forEach((cb) => { cb.checked = !!s.checklist[cb.value]; });
     fillFromScan();
-    setStatus(`Demo loaded: ${s.title} (demo date ${s.today}).`);
+    setStatus(`Sample pack: ${s.title} (sample date ${s.today}).`);
+    state.readBy = "";
     runCheck();
   }
 
@@ -464,6 +492,12 @@ Reply with only this JSON object:
     $("checklist").replaceChildren(...MediAgent.checklist().map((c) =>
       el("label", {}, el("input", { type: "checkbox", value: c.id }), el("span", {}, c.label))));
 
+    document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => showView(b.dataset.go)));
+    $("btnBack").addEventListener("click", () => showView("home"));
+    $("quickPicks").replaceChildren(...["Dolo 650", "Pan 40", "Azee 500", "Telma 40", "Paracetamol", "Calcium"].map((n) =>
+      el("button", { class: "chip-btn", onclick: () => { $("search").value = n; runSearch(); } }, n)));
+    // live barcode scanning needs a camera page of its own (https / localhost, not inside claude.ai)
+    $("btnLive").hidden = !(window.isSecureContext && !window.claude);
     $("btnLive").addEventListener("click", startLive);
     $("btnStop").addEventListener("click", stopLive);
     $("photo").addEventListener("change", (e) => { scanPhoto(e.target.files[0]); e.target.value = ""; });
@@ -482,4 +516,5 @@ Reply with only this JSON object:
   }
 
   init();
+  showView("home");
 })();
