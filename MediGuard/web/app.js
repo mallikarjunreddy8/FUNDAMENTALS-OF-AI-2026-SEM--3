@@ -12,7 +12,71 @@
     today: null,     // only set for demos (fixed date so the demo never changes)
     live: null,      // Html5Qrcode instance while the camera is on
     lastReport: null,
+    aiNotes: [],     // problems the AI reader saw on the pack (blurry print, misspellings...)
+    readBy: "",      // "Claude vision" or "OCR"
   };
+
+  // ---------------------------------------------------------------- AI reader (Claude vision)
+  // On claude.ai the page may ask Claude to read the photo. Elsewhere (PC server, plain browser)
+  // this resolves null and the free OCR reader is used instead.
+  const aiReaderPromise = (async () => {
+    try {
+      if (!window.claude || typeof window.claude.use !== "function") return null;
+      const sample = await window.claude.use("sample");
+      if (!sample) return null;
+      const lim = await sample.limits().catch(() => null);
+      return lim && lim.images ? sample : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const AI_PROMPT = `You are reading a photo of a medicine strip, blister or box (usually sold in India) for a fake-medicine check.
+Copy what is PRINTED exactly as printed: keep spelling mistakes, odd letters and spacing, never correct or complete words, never guess.
+Use null for anything you cannot read. Batch numbers and dates are often stamped in small dark ink, sometimes sideways or partly rubbed off:
+look carefully; for a single character you cannot make out write "?".
+Reply with only this JSON object:
+{"brand": string or null (the brand name exactly as printed; null if the pack only gives the generic / chemical name),
+ "generic_name": string or null,
+ "composition": [{"salt": string, "strength": string}],
+ "batch": string or null, "mfg": "MM/YYYY" or null, "exp": "MM/YYYY" or null,
+ "manufacturer": string or null (company after "Manufactured by" / "Mfd. by"), "marketed_by": string or null,
+ "mrp": string or null, "licence_no": string or null,
+ "government_supply": true or false (printed "Government supply", "Not for sale" or similar),
+ "has_qr_or_barcode": true or false,
+ "text_lines": [every printed line, verbatim, in reading order],
+ "print_problems": [short notes on visible problems a pharmacist would worry about: misspelled words (quote them), blurry, smudged or uneven printing, mismatched fonts or colours, signs of tampering or re-sealing; [] if none],
+ "photo_quality": "good" or "fair" or "poor"}`;
+
+  // Turn the AI's reading into the same "printed text" the agent reads from OCR
+  function aiToText(r) {
+    const lines = Array.isArray(r.text_lines) ? r.text_lines.map(String) : [];
+    if (r.brand) lines.unshift(String(r.brand));            // brands lead the pack
+    (r.composition || []).forEach((c) => c && c.salt && lines.push(`${c.salt} ${c.strength || ""}`));
+    if (r.batch) lines.push(`B.No. ${r.batch}`);
+    if (r.mfg) lines.push(`Mfg. ${r.mfg}`);
+    if (r.exp) lines.push(`Exp. ${r.exp}`);
+    if (r.manufacturer) lines.push(`Manufactured by: ${r.manufacturer}`);
+    if (r.government_supply) lines.push("Government Supply - Not for Sale");
+    return lines.join("\n");
+  }
+
+  async function readWithAI(sample, file) {
+    setStatus("Claude is reading the photo… (5-30 seconds)", true);
+    const r = await sample.json(AI_PROMPT, { images: file });
+    if (!r || typeof r !== "object") throw { code: "invalid_json" };
+    state.aiNotes = (Array.isArray(r.print_problems) ? r.print_problems : []).map(String).filter(Boolean).slice(0, 4);
+    $("ocrText").value = aiToText(r);
+    const put = (id, v) => { if (v && !$(id).value) $(id).value = v; };
+    put("fBatch", r.batch ? String(r.batch).toUpperCase() : "");
+    put("fMfg", toMonthInput(r.mfg));
+    put("fExp", toMonthInput(r.exp));
+    put("fMaker", r.manufacturer || r.marketed_by || "");
+    state.readBy = "Claude vision";
+    const unsure = r.batch && String(r.batch).includes("?") ? " Part of the batch no. was unreadable - fix it in step 2." : "";
+    setStatus((r.photo_quality === "poor" ? "Read, but the photo is unclear - a sharper photo gives a better check. " :
+      "Read by Claude. ") + "Check the details below." + unsure);
+  }
 
   const FIELDS = { brand: "fBrand", batch: "fBatch", barcode: "fBarcode", price: "fPrice", mfg: "fMfg", exp: "fExp", manufacturer: "fMaker" };
 
@@ -190,8 +254,24 @@
       } catch (e) { /* no code in this photo - that's fine */ }
     }
 
-    // 2. read the printed text (OCR)
-    if (!window.Tesseract) {
+    // 2. read the printed text: Claude vision when available, else the free OCR reader
+    state.aiNotes = [];
+    state.readBy = "";
+    let done = false;
+    const sample = await aiReaderPromise;
+    if (sample) {
+      try {
+        await readWithAI(sample, file);
+        done = true;
+      } catch (e) {
+        const why = { not_granted: "AI reading was not allowed", rate_limited: "AI reading is busy",
+          image_rejected: "the photo couldn't be sent" }[e && e.code] || "AI reading failed";
+        setStatus(`${why} - using the basic text reader instead…`, true);
+      }
+    }
+    if (done) {
+      // nothing more to read
+    } else if (!window.Tesseract) {
       setStatus("The text reader didn't load. Type the details in step 2.");
     } else {
       try {
@@ -221,6 +301,7 @@
         }
         await worker.terminate();
         $("ocrText").value = text;
+        state.readBy = "OCR";
         setStatus($("ocrText").value ? "Done. Check the details below, then press Check." :
           "Couldn't read any text. Try a sharper photo in better light, or type the details.");
       } catch (err) {
@@ -260,13 +341,16 @@
     if (state.codes.some((c) => c.text === manual.barcode)) manual.barcode = "";
     const checklist = {};
     document.querySelectorAll("#checklist input").forEach((cb) => { checklist[cb.value] = cb.checked; });
-    return { text: $("ocrText").value, codes: state.codes, manual, checklist, today: state.today || undefined };
+    return { text: $("ocrText").value, codes: state.codes, manual, checklist, today: state.today || undefined,
+             aiNotes: state.aiNotes };
   }
 
   function resetForm() {
     for (const id of Object.values(FIELDS)) $(id).value = "";
     document.querySelectorAll("#checklist input").forEach((cb) => { cb.checked = false; });
     state.codes = [];
+    state.aiNotes = [];
+    state.readBy = "";
     renderCodes();
   }
 
@@ -294,7 +378,7 @@
     const report = (await serverCheck(obs)) || Object.assign(MediAgent.check(obs),
       { source: `Offline check (built-in list of ${MediAgent.brands().length} medicines)` });
     state.lastReport = report;
-    $("source").textContent = report.source || "";
+    $("source").textContent = (report.source || "") + (state.readBy ? ` · photo read by ${state.readBy}` : "");
     const v = report.verdict;
 
     $("verdict").className = "verdict tone-" + v.tone;

@@ -268,6 +268,7 @@
       codes,
       printed,
       checklist: obs.checklist || {},
+      aiNotes: Array.isArray(obs.aiNotes) ? obs.aiNotes.slice(0, 4) : [],
       today: { y: now.getFullYear(), m: now.getMonth() + 1 },
     };
   }
@@ -458,6 +459,9 @@
       add("warn", 10, "No batch number found",
         "Every genuine medicine prints a batch number (B.No.). Type it in if the camera missed it.");
     }
+    if (printed.batch && printed.batch.includes("?")) {
+      add("info", 0, "Part of the batch no. is unreadable", `Read as "${printed.batch}". Type the full number from the strip.`);
+    }
     if (printed.batch && !/^[A-Z0-9][A-Z0-9\-\/]{2,14}$/.test(cleanBatch(printed.batch))) {
       add("warn", 10, "Unusual batch number", `"${printed.batch}" doesn't look like a normal batch number.`);
     }
@@ -543,6 +547,10 @@
         "Prescription medicines must print the 'Rx' / Schedule H warning. It may just be on another side of the box.");
     }
 
+    // ---------- Rule 7b: what the AI reader saw on the pack (max 2 notes count) ----------
+    facts.aiNotes.forEach((note, i) => add("warn", i < 2 ? 10 : 0, "AI noticed: " + note,
+      "Check this by eye - compare with a pack you know is genuine."));
+
     // ---------- Rule 8: what the user saw ----------
     for (const item of DATA.CHECKLIST) {
       if (facts.checklist[item.id]) add("warn", item.weight, "You noticed: " + item.label, "");
@@ -575,7 +583,7 @@
     if (otherDanger >= HIGH_RISK || (risk >= HIGH_RISK && !expired)) key = "fake";
     else if (expired) key = "expired";
     else if (risk >= SUSPICIOUS || ev.some((e) => e.weight >= 20)) key = "suspicious";  // one strong warning is enough
-    else if (reasoning.medicine && passes >= 2 && !ev.some((e) => /^No (batch|expiry)/.test(e.title))) key = "ok";
+    else if (reasoning.medicine && passes >= 2 && !ev.some((e) => /^No (batch|expiry)|^Part of the batch/.test(e.title))) key = "ok";
     else if (reasoning.medicine && risk < SUSPICIOUS) key = "details";   // looks fine so far, but batch / expiry unread
     else if (risk > 0 && reasoning.medicine) key = "suspicious";
     else key = "unknown";
