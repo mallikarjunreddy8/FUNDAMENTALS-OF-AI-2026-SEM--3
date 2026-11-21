@@ -30,6 +30,12 @@ possible, repeatable version of events), for **180 simulated days** (one step = 
 
 Charts and CSV files are in `results/`. The full write-up with the literature review is in **`docs/REPORT.md`**.
 
+## Try it now
+
+**Phone app online:** https://claude.ai/artifact/5dNFNZHivyVE1jb2kGUUXM. Open it on your phone, tap
+"Take a photo of the strip / box", or press a demo button. This online version uses the built-in list of 61 medicines
+and works without the PC. For the full 253,973-medicine check, run `server.py` (below).
+
 ## Run it (Windows)
 
 Double-click **`run.bat`**. The first time it makes a `venv`, installs the packages and downloads the dataset

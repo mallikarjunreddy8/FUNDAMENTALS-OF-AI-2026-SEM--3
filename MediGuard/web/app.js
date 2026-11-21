@@ -162,6 +162,7 @@
         const canvas = await prepareImage(file);
         const worker = await Tesseract.createWorker("eng", 1, {
           workerPath: "lib/worker.min.js",
+          ...(window.MEDIGUARD_OCR || {}),   // optional: local OCR engine + language files (no CDN)
           logger: (m) => {
             if (m.status === "recognizing text") setStatus(`Reading the text… ${Math.round(m.progress * 100)}%`, true);
           },
