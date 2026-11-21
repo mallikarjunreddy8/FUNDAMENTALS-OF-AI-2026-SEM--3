@@ -119,4 +119,12 @@ test("government-supply strip bought in a shop is suspicious", () => {
   assert.strictEqual(r.verdict.key, "suspicious", titles(r));
 });
 
+test("a past expiry read only by the camera asks to check instead of saying EXPIRED", () => {
+  const r = A.check({ today: "2026-11-21", text: REAL.replace("DP.09/2027", "EXP.09/2022"), unconfirmed: true });
+  assert.strictEqual(r.verdict.key, "suspicious", titles(r));
+  assert.ok(/please check/.test(titles(r)));
+  const r2 = A.check({ today: "2026-11-21", text: REAL.replace("DP.09/2027", "EXP.09/2022") });
+  assert.strictEqual(r2.verdict.key, "expired");   // confirmed by the user -> EXPIRED
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ", some FAILED" : ""}`);

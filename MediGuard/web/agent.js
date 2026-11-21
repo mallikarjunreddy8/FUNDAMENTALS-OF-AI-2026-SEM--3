@@ -300,6 +300,7 @@
       text,
       brandText: manual.brand ? String(manual.brand) : "",
       price: parseFloat(manual.price) || 0,
+      unconfirmed: !!obs.unconfirmed,      // details came from the camera and the user has not checked them
       codes,
       printed,
       checklist: obs.checklist || {},
@@ -513,7 +514,12 @@
     const now = monthIndex(today);
     if (exp) {
       const left = monthIndex(exp) - now;
-      if (left < 0) add("danger", 50, "EXPIRED", `It expired in ${showDate(exp)}. Do not take it.`);
+      if (left < 0 && facts.unconfirmed) {
+        // read by the camera only: a misread digit must not call a good strip expired
+        add("warn", 30, "Expiry date looks past - please check",
+          `The camera read ${showDate(exp)}. If that is what the strip says, it is EXPIRED - do not take it. ` +
+          "If the camera misread it, tap 'Correct these' and fix the date.");
+      } else if (left < 0) add("danger", 50, "EXPIRED", `It expired in ${showDate(exp)}. Do not take it.`);
       else if (left < SOON_MONTHS) add("info", 0, "Expires soon", `Expiry ${showDate(exp)} - use before then.`);
       else add("pass", 0, "Not expired", `Expiry ${showDate(exp)}.` +
         (printed.expGuessed ? " (The latest date stamped on the pack - check it is the Exp. date.)" : ""));

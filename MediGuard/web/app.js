@@ -287,6 +287,7 @@ Reply with only this JSON object:
     $("btnCheck").disabled = true;
     const texts = [];
     state.photos = files;
+    state.edited = false;
     state.stampBoxes = [];
     const sample = await aiReaderPromise;   // Claude vision: only on claude.ai, never needed
 
@@ -361,7 +362,7 @@ Reply with only this JSON object:
     const checklist = {};
     document.querySelectorAll("#checklist input").forEach((cb) => { checklist[cb.value] = cb.checked; });
     return { text: $("ocrText").value, codes: state.codes, manual, checklist, today: state.today || undefined,
-             aiNotes: state.aiNotes };
+             aiNotes: state.aiNotes, unconfirmed: !!state.readBy && !state.edited };
   }
 
   function resetForm() {
@@ -522,7 +523,7 @@ Reply with only this JSON object:
     document.querySelectorAll("[data-demo]").forEach((b) => b.addEventListener("click", () => loadDemo(b.dataset.demo)));
     // typing anything yourself means it's no longer a demo
     document.querySelectorAll("main input, main textarea").forEach((i) => i.addEventListener("input", () => {
-      if (i.id !== "search") state.today = null;
+      if (i.id !== "search") { state.today = null; state.edited = true; }
     }));
 
     if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !window.MEDIGUARD_APP) {

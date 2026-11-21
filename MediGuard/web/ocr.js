@@ -81,7 +81,7 @@
    */
   function prepare(img, opts) {
     opts = opts || {};
-    const base = scaled(img, MAX_SIDE);
+    const base = scaled(img, opts.maxSide || MAX_SIDE);
     const w = base.width, h = base.height;
     const px = base.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
     const minc = new Float32Array(w * h), lum = new Float32Array(w * h), blueness = new Float32Array(w * h);
@@ -278,72 +278,53 @@
    * Read a photo. onProgress(message, fraction) is called as each pass runs.
    */
   async function read(file, onProgress) {
+    // FAST by design (about 3-4 reading passes): one pass for the print in its direction, then
+    // the stamp block. The slow, thorough reading is "Zoom on batch / expiry" (readRegion).
     const say = (msg, f) => onProgress && onProgress(msg, f);
     const progress = (msg, f) => say(msg, f);
     say("Opening the photo…", 0);
     const img = await loadImage(file);
-    say("Cleaning the photo (glare, foil)…", 0);
-    const v = prepare(img);
+    say("Cleaning the photo…", 0);
+    const v = prepare(img, { maxSide: 1800 });
     const w = await getWorkers(progress);
 
     say("Finding which way the text runs…", 0);
     const dirs = await directions(w.osd, v.flat);
-    const results = [];
-    for (const d of dirs) {
-      progress.pass = `Reading the print${d ? " (turned " + d + "°)" : ""}`;
-      results.push(await recognize(w.text, rotate(v.flat, d), 3));
+    progress.pass = "Reading the print";
+    let main = await recognize(w.text, rotate(v.flat, dirs[0]), 3);
+    let bestDir = dirs[0];
+    if (main.good < 8 && dirs.length > 1) {            // hardly any words: try upright as well
+      progress.pass = "Reading the print (upright)";
+      const up = await recognize(w.text, v.flat, 3);
+      if (up.good > main.good) { main = up; bestDir = 0; }
     }
-    results.sort((a, b) => b.good - a.good);                 // best reading first
-    const best = dirs.length > 1 ? (results[0].good > 0 ? results.slice(0, 2) : results) : results;
-    const bestDir = dirs[0];
-    progress.pass = "Reading the print again (black & white)";
-    const bin = await recognize(w.text, rotate(v.binary, bestDir), 11);
-    let text = mergeLines([...best.map((r) => r.text), bin.text]);
+    let text = mergeLines([main.text]);
 
-    // batch / dates are stamped: read the stamp ink in every direction until both are found
-    const missing = () => {
-      const p = root.MediAgent ? root.MediAgent.readPrintedText(text) : {};
-      return !p.batch || !p.exp;
-    };
-    // 4a. the stamp block(s): cut out, enlarge, read both ways along the long side and with two
-    //     layouts; keep the reading from which the most batch / date fields can be parsed
+    // the stamp (batch / dates): read the inked block along its long side, the other way only if needed
     const fields = (t) => {
       const p = root.MediAgent ? root.MediAgent.readPrintedText(t) : {};
       return (p.batch ? 2 : 0) + (p.exp ? 2 : 0) + (p.mfg ? 1 : 0);
     };
+    const missing = () => fields(text) < 4;              // batch + expiry not both found yet
     let stampGuess = null, stampGuessScore = -1;
     for (const box of v.boxes) {
       if (!missing()) break;
       const dirsForBox = box.h > box.w * 1.2 ? [270, 90] : [0, 180];
-      let best = null;
-      for (const d of dirsForBox) {
-        const piece = rotate(crop(v.flat, box, 2000), d);
-        for (const [img, psm] of [[piece, 6], [otsu(piece), 6], [piece, 11]]) {
-          progress.pass = "Reading the stamped batch no. / dates";
-          const r = await recognize(w.text, img, psm);
-          const lines = r.text.split("\n").filter((l) => STAMP_LINE.test(l)).join("\n");
-          const score = fields(lines) * 100 + r.good;
-          if (!best || score > best.score) best = { score, lines };
-        }
-        if (best && best.score >= 400) break;        // batch + expiry found: no need to try more
+      const piece0 = crop(v.flat, box, 1600);
+      for (const [d, psm] of [[dirsForBox[0], 6], [dirsForBox[0], 11], [dirsForBox[1], 6]]) {
+        progress.pass = "Reading the stamped batch no. / dates";
+        const r = await recognize(w.text, rotate(piece0, d), psm);
+        const lines = r.text.split("\n").filter((l) => STAMP_LINE.test(l)).join("\n");
+        const score = fields(lines) * 100 + r.good;
+        if (score > stampGuessScore) { stampGuessScore = score; stampGuess = box; }
+        if (fields(lines) > 0) { text = mergeLines([text, lines]); break; }
       }
-      if (best && best.lines) text = mergeLines([text, best.lines]);
-      if (best && best.score > stampGuessScore) { stampGuessScore = best.score; stampGuess = box; }
-    }
-    // 4b. still missing: stamp ink of the whole photo in every direction
-    const stampDirs = [...new Set([bestDir, 0, 90, 270, 180])];
-    for (let k = 0; k < stampDirs.length && missing(); k++) {
-      progress.pass = `Looking for the stamped batch no. / expiry (${k + 1}/${stampDirs.length})`;
-      const r = await recognize(w.text, rotate(v.stamp, stampDirs[k]), 11);
-      const lines = r.text.split("\n").filter((l) => STAMP_LINE.test(l));
-      if (lines.length) text = mergeLines([text, lines.join("\n")]);
     }
     progress.pass = null;
     // where the stamp probably is, in the photo's own pixels (to pre-draw the zoom box)
-    // prefer the block where batch / dates were actually read; else the biggest ink block
     const b0 = stampGuessScore >= 100 ? stampGuess : (v.boxes.slice().sort((a, b) => b.y - a.y)[0] || null);
     const stampBox = b0 ? { x: b0.x / v.scale, y: b0.y / v.scale, w: b0.w / v.scale, h: b0.h / v.scale } : null;
-    return { text, angle: bestDir, passes: dirs.length + 1, stampBox };
+    return { text, angle: bestDir, stampBox };
   }
 
   /*
